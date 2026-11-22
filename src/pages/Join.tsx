@@ -34,18 +34,18 @@ export default function Join() {
           <div className="grid h-10 w-10 place-items-center rounded-2xl bg-blue text-lime">
             <Zap className="h-5 w-5" fill="currentColor" />
           </div>
-          <Badge tone="lime">5 min · 5 preguntas</Badge>
+          <Badge tone="lime">5 min · 5 puertas</Badge>
         </div>
 
         <div className="mt-14">
           <Label>Dinámica en vivo</Label>
           <h1 className="display mt-3 text-[64px] sm:text-7xl">
-            MISIÓN:
+            ESCAPE ROOM
             <br />
-            <span className="serif-i text-blue">cambio.</span>
+            <span className="serif-i text-blue">misión: cambio.</span>
           </h1>
           <p className="mt-5 max-w-xs text-[15px] leading-relaxed text-ink/60">
-            Responde rápido, suma puntos y sube al podio. Necesitas el código que ves en pantalla.
+            Encuentra los 5 códigos y escapa antes de que se acabe el tiempo.
           </p>
         </div>
 
@@ -78,7 +78,7 @@ export default function Join() {
           </Button>
         </form>
 
-        <p className="mt-auto pt-8 text-center text-xs text-ink/40">Sin registro. Solo tu nombre.</p>
+        <p className="mt-auto pt-8 text-center text-xs text-ink/40">Sin registro. Solo tu nombre. 5 minutos para salir.</p>
       </motion.div>
     </main>
   )

@@ -82,7 +82,7 @@ export default function Control({ admin }: { admin: Admin }) {
       </section>
 
       <aside className="card flex flex-col items-center p-8 text-center">
-        <Label>{s === 'lobby' ? 'Pregunta 0' : `Pregunta ${game.q_index + 1} de ${game.q_total}`}</Label>
+        <Label>{s === 'lobby' ? 'Puerta 0' : `Puerta ${game.q_index + 1} de ${game.q_total}`}</Label>
         {(s === 'question' || s === 'paused') ? (
           <div className="mt-5">
             <TimerRing ms={ms} totalMs={game.duration_ms} size={160} paused={s === 'paused'} />

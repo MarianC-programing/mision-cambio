@@ -76,7 +76,7 @@ export default function General({ admin }: { admin: Admin }) {
           <div className="flex items-start justify-between gap-6">
             <div className="min-w-0">
               <Label>
-                {game.status === 'lobby' ? 'Pregunta actual' : `Pregunta ${game.q_index + 1} de ${game.q_total}`}
+                {game.status === 'lobby' ? 'Puerta actual' : `Puerta ${game.q_index + 1} de ${game.q_total}`}
               </Label>
               {q && game.status !== 'lobby' ? (
                 <>
@@ -92,7 +92,7 @@ export default function General({ admin }: { admin: Admin }) {
             {game.status !== 'lobby' && game.status !== 'finished' && game.status !== 'reveal' && (
               <div className="text-center">
                 <TimerRing ms={ms} totalMs={game.duration_ms} size={128} paused={game.status === 'paused'} />
-                <Label className="mt-2 block">Temporizador</Label>
+                <Label className="mt-2 block">Tiempo para escapar</Label>
               </div>
             )}
           </div>

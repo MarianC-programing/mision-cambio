@@ -73,7 +73,7 @@ function Lobby({ session, players }: { session: Session; players: Player[] }) {
           <br />
           <span className="serif-i text-blue">{session.name}.</span>
         </h1>
-        <p className="mt-4 text-ink/60">Esperando a que el administrador inicie la partida…</p>
+        <p className="mt-4 text-ink/60">Esperando a que el administrador abra la primera puerta…</p>
       </motion.div>
       <div className="card mt-8 p-5">
         <div className="mb-3 flex items-center justify-between">
@@ -153,7 +153,7 @@ function Round({ game, session, ranked, me }: { game: Game; session: Session; ra
       <div className="flex items-center justify-between">
         <div>
           <Label>
-            Pregunta {game.q_index + 1} de {game.q_total}
+            Puerta {game.q_index + 1} de {game.q_total}
           </Label>
           <div className="mt-2">
             <Badge tone="purple">{q.model}</Badge>
@@ -224,7 +224,7 @@ function Round({ game, session, ranked, me }: { game: Game; session: Session; ra
             >
               <div>
                 <p className="display text-2xl">
-                  {answer?.is_correct ? '¡Correcto!' : answer ? 'Esta vez no.' : 'Sin respuesta'}
+                  {answer?.is_correct ? 'Puerta abierta' : answer ? 'Código incorrecto' : 'Puerta cerrada'}
                 </p>
                 <Label>Vas #{rank || '—'} · {me?.score ?? 0} pts</Label>
               </div>
@@ -243,14 +243,29 @@ function Final({ ranked, me }: { ranked: Player[]; me?: Player }) {
   return (
     <div className="flex flex-1 flex-col">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4 text-center">
-        <Trophy className="mx-auto h-8 w-8 text-orange" />
-        <Label className="mt-3 block">Misión cumplida</Label>
-        <h1 className="display mt-2 text-6xl">
-          Puesto <span className="serif-i text-blue">#{rank || '—'}</span>
-        </h1>
-        <p className="mt-2 text-ink/60">
-          {me?.score ?? 0} puntos · {me?.correct_count ?? 0} aciertos
-        </p>
+        {me?.score ?? 0 > 0 ? (
+          <>
+            <Trophy className="mx-auto h-8 w-8 text-lime" />
+            <Label className="mt-3 block">Has escapado</Label>
+            <h1 className="display mt-2 text-6xl">
+              Puesto <span className="serif-i text-blue">#{rank || '—'}</span>
+            </h1>
+            <p className="mt-2 text-ink/60">
+              {me?.score ?? 0} puntos · {me?.correct_count ?? 0} puertas abiertas
+            </p>
+          </>
+        ) : (
+          <>
+            <Trophy className="mx-auto h-8 w-8 text-ink/30" />
+            <Label className="mt-3 block">Tiempo agotado</Label>
+            <h1 className="display mt-2 text-6xl">
+              No lograste escapar
+            </h1>
+            <p className="mt-2 text-ink/60">
+              {me?.score ?? 0} puntos · {me?.correct_count ?? 0} puertas abiertas
+            </p>
+          </>
+        )}
       </motion.div>
       <div className="mt-8">
         <Podium players={ranked} />
