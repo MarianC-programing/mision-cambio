@@ -68,7 +68,7 @@ export function useAdmin(pin: string, onUnauthorized: () => void) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'games', filter: `id=eq.${gameId}` }, soon)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter: `game_id=eq.${gameId}` }, soon)
       .subscribe()
-    const poll = setInterval(() => void refresh(), 3000)
+    const poll = setInterval(() => void refresh(), 2000)
     return () => {
       clearInterval(poll)
       if (throttle.current) clearTimeout(throttle.current)
@@ -115,6 +115,9 @@ export function useAdmin(pin: string, onUnauthorized: () => void) {
     resume: () => run(() => api.adminResume(pin, id)),
     reveal: () => run(() => api.adminReveal(pin, id)),
     next: () => run(() => api.adminNext(pin, id)),
+    resolveBetrayal: () => run(() => api.adminResolveBetrayal(pin, id)),
+    startTrial: () => run(() => api.adminStartTrial(pin, id)),
+    resolveTrial: () => run(() => api.adminResolveTrial(pin, id)),
     finish: () => run(() => api.adminFinish(pin, id)),
     removePlayer: (playerId: string) => run(() => api.adminRemovePlayer(pin, playerId)),
     saveQuestion: async (q: AdminQuestion) => {
@@ -128,6 +131,9 @@ export function useAdmin(pin: string, onUnauthorized: () => void) {
         return false
       }
     },
+    formGroups: () => run(() => api.adminFormGroups(pin, id)),
+    eliminateMember: (groupId: string, qPos: number) => run(() => api.eliminateRandomMember(pin, groupId, qPos)),
+    awardKey: (groupId: string, qPos: number) => run(() => api.awardGroupKey(pin, groupId, qPos)),
   }
 }
 
@@ -135,8 +141,12 @@ export type Admin = ReturnType<typeof useAdmin>
 
 export const STATUS_LABEL = {
   lobby: 'En sala',
-  question: 'Pregunta en curso',
+  question: 'Puerta abierta',
   paused: 'Pausada',
   reveal: 'Respuesta mostrada',
+  betrayal: 'Votación de traición',
+  betrayal_reveal: 'Traición resuelta',
+  trial: 'Prueba final',
+  trial_reveal: 'Prueba final resuelta',
   finished: 'Finalizada',
 } as const

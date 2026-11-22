@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { serverTime } from './api'
-import type { Player, Session } from './types'
+import type { Session } from './types'
 
 /** Diferencia (ms) entre el reloj del servidor y el del dispositivo. */
 export function useServerOffset(): number {
@@ -47,12 +47,6 @@ export function useCountdown(endsAt: string | null, offset: number, frozenMs: nu
 }
 
 export const seconds = (ms: number) => Math.ceil(ms / 1000)
-
-export function sortPlayers(players: Player[]): Player[] {
-  return [...players].sort(
-    (a, b) => b.score - a.score || a.total_time_ms - b.total_time_ms || a.created_at.localeCompare(b.created_at),
-  )
-}
 
 const KEY = 'mision-cambio-session'
 export function loadSession(): Session | null {

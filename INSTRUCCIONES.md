@@ -1,6 +1,6 @@
 # MISIÓN: CAMBIO — Guía de despliegue
 
-Aplicación web para dinámica educativa competitiva (5 preguntas, 5 minutos).
+Escape room grupal para una dinámica educativa: equipos al azar, 10 puertas, votación de traición y prueba final.
 Stack: React + Vite + TypeScript + Tailwind CSS + Supabase + Framer Motion + Lucide React.
 
 ---
@@ -23,15 +23,20 @@ el **SQL Editor** del panel de Supabase.
 
 | Tabla | Uso | Acceso público |
 |-------|-----|----------------|
-| `games` | Estado de la partida, pregunta actual, temporizador, reveal | Solo lectura (Realtime) |
-| `players` | Nombre, puntuación, aciertos, conexión | Solo lectura (Realtime) |
-| `questions` | Las 5 preguntas, opciones, respuesta correcta, explicación | **Ninguno** (solo funciones admin) |
-| `answers` | Respuestas de los participantes | **Ninguno** (solo RPC `submit_answer`) |
-| `player_secrets` | Token secreto por jugador (valida una respuesta por pregunta) | **Ninguno** |
+| `games` | Estado de la partida, fase, temporizador, pregunta actual y reveal | Solo lectura (Realtime) |
+| `players` | Nombre y equipo de cada participante | Solo lectura (Realtime) |
+| `groups`, `group_members` | Equipos, miembros, eliminados y fugados | **Ninguno** (solo `my_group_state` con token) |
+| `group_answers`, `group_keys`, `eliminations` | Respuesta del equipo por puerta, llaves y eliminaciones | **Ninguno** |
+| `finale_votes` | Votos secretos de la traición | **Ninguno** (se publican al cerrar la votación) |
+| `questions` | 10 puertas + 1 prueba final, con respuesta correcta y explicación | **Ninguno** (solo funciones admin) |
+| `player_secrets` | Token secreto por jugador | **Ninguno** |
 | `app_config` | Hash del PIN de administrador | **Ninguno** |
 
 Todas las tablas tienen **RLS activo**. Las respuestas correctas nunca viajan al
 teléfono; solo se publican en `games.reveal` cuando el admin las muestra.
+
+> Si ya tenías una versión anterior instalada, vuelve a ejecutar `schema.sql`: migra
+> sin perder datos. Las preguntas que ya editaste a mano se respetan.
 
 ### Cambiar el PIN de administrador
 
@@ -114,20 +119,28 @@ La app será una SPA; `vercel.json` ya incluye el rewrite de rutas para que
 ### Participantes (teléfono)
 
 1. Escanean el QR o escriben el código de 5 caracteres (pestaña **General** del admin).
-2. Escriben su nombre y se unen.
-3. Esperan en la sala hasta que el admin inicie.
-4. Responden 5 preguntas (30 s cada una, 100 pts + hasta 50 por rapidez).
-5. Al final ven su puesto y puntuación.
+2. Escriben su nombre y se unen. Esperan en la sala.
+3. Cuando el admin forma los equipos, ven su color y a sus compañeros.
+4. **10 puertas** (25 s cada una): el primero del equipo que responde decide por todos. Acertar da una llave; fallar elimina a un miembro al azar.
+5. **La última puerta**: cada sobreviviente vota en secreto *salimos todos* o *salgo yo solo*.
+6. **Prueba final**: una pregunta para los equipos que siguen. Acertar es escapar; fallar es volver al nivel cero.
 
 ### Administrador (laptop, ruta `/admin`)
 
 1. Entra con el PIN de administrador.
-2. **Preguntas**: edita modelo, pregunta, 4 opciones, respuesta correcta y explicación de cada una (las 5 modelos: Quick-Fix, Boehm, Osborne, mejora iterativa, reutilización).
-3. **General**: crea la partida, muestra el QR y el código.
-4. **Control**: Iniciar partida → avanza preguntas → pausa/reanuda → muestra respuesta correcta → siguiente → finalizar.
-5. **Participantes**: tabla con nombre, puntuación, aciertos, estado de conexión; puede expulsar.
-6. **Respuestas**: todas las respuestas con participante, pregunta, modelo, selección, correcta, resultado, tiempo y puntos; filtros por participante y por correcta/incorrecta.
-7. **Ranking**: podio top 3 y clasificación completa en tiempo real.
+2. **Preguntas**: revisa o edita las 10 puertas y la prueba final antes de empezar.
+3. **General**: crea la partida y muestra el QR en el proyector.
+4. **Control**: cuando todos hayan entrado pulsa *Formar equipos* y luego *Iniciar partida*.
+   Después, el botón grande siempre es el siguiente paso: *Cerrar puerta y revelar* → *Siguiente puerta*
+   (×10) → *Abrir la última puerta* → *Cerrar votación y revelar* → *Lanzar prueba final* →
+   *Cerrar prueba final* → *Ver resultado final*.
+5. **Grupos**: miembros, eliminados, votos (solo visibles tras cerrar la votación) y correcciones manuales.
+6. **Participantes**: equipo, estado y conexión de cada uno; puede expulsar.
+7. **Respuestas**: la respuesta de cada equipo por puerta, con quién la dio y si fue correcta.
+8. **Ranking**: ganadores y clasificación de equipos.
+
+> Tiempo aproximado: 10 puertas × 25 s + 45 s de votación + 25 s de prueba final, más
+> las pausas que tú decidas al mostrar cada resultado.
 
 ---
 

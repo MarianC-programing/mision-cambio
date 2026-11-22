@@ -1,64 +1,45 @@
 import { useEffect, useState } from 'react'
-import { fetchGame, fetchPlayers } from './api'
+import { fetchGame } from './api'
 import { supabase } from './supabase'
-import type { Game, Player } from './types'
+import type { Game } from './types'
 
-/** Estado de la partida + jugadores: Realtime con sondeo de respaldo (móviles inestables). */
-export function useGameFeed(gameId: string | undefined) {
+/** Estado de la partida: Realtime con sondeo de respaldo (los móviles pierden conexión con facilidad). */
+export function useGame(gameId: string | undefined) {
   const [game, setGame] = useState<Game | null>(null)
-  const [players, setPlayers] = useState<Player[]>([])
   const [gone, setGone] = useState(false)
 
   useEffect(() => {
     if (!gameId) return
     let alive = true
-    let timer: ReturnType<typeof setTimeout> | undefined
+    // Nunca retrocedemos a una versión más vieja de la partida.
     const apply = (g: Game) => setGame((cur) => (cur && cur.updated_at > g.updated_at ? cur : g))
-    const loadPlayers = async () => {
-      const p = await fetchPlayers(gameId)
-      if (alive) setPlayers(p)
-    }
-    const loadGame = async () => {
+    const load = async () => {
       const g = await fetchGame(gameId)
       if (!alive) return
       if (g) apply(g)
       else setGone(true)
     }
-    const refresh = () => {
-      void loadGame()
-      void loadPlayers()
-    }
-    const schedule = () => {
-      if (timer) return
-      timer = setTimeout(() => {
-        timer = undefined
-        void loadPlayers()
-      }, 400)
-    }
-
-    refresh()
+    void load()
     const ch = supabase
-      .channel(`feed-${gameId}`)
+      .channel(`game-${gameId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'games', filter: `id=eq.${gameId}` }, (p) => {
-        if (p.new && 'id' in p.new) apply(p.new as Game)
+        if (alive && p.new && 'id' in p.new) apply(p.new as Game)
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter: `game_id=eq.${gameId}` }, schedule)
       .subscribe()
-    const poll = setInterval(refresh, 4000)
+    const poll = setInterval(() => void load(), 3000)
     const onVis = () => {
-      if (!document.hidden) refresh()
+      if (!document.hidden) void load()
     }
     document.addEventListener('visibilitychange', onVis)
     return () => {
       alive = false
       clearInterval(poll)
-      if (timer) clearTimeout(timer)
       document.removeEventListener('visibilitychange', onVis)
       void supabase.removeChannel(ch)
     }
   }, [gameId])
 
-  return { game, players, gone }
+  return { game, gone }
 }
 
 /** El participante anuncia que está conectado (Realtime Presence, sin escribir en la base). */

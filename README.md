@@ -1,7 +1,7 @@
 MISION: CAMBIO
 ==============
 
-Dinamica educativa competitiva para una exposicion universitaria. Dura 5 minutos y consta de 5 preguntas. Los estudiantes entran desde sus telefonos con un codigo o QR y el profesor controla la partida desde un panel de administrador en laptop.
+Escape room grupal para una exposicion universitaria sobre mantenimiento de software. Los estudiantes entran desde sus telefonos con un codigo o QR, se reparten al azar en equipos y el profesor controla la partida desde un panel de administrador en laptop.
 
 Tecnologias
 -----------
@@ -9,47 +9,47 @@ Tecnologias
 - React + Vite
 - TypeScript
 - Tailwind CSS
-- Supabase (base de datos, Realtime y almacenamiento)
+- Supabase (base de datos, Realtime y funciones RPC)
 - Framer Motion (animaciones)
 - Lucide React (iconos)
 - Preparado para GitHub y Vercel
 
-Flujo de la dinamica
---------------------
+Como se juega
+-------------
 
-Participantes (telefono):
+1. El servidor reparte a los participantes al azar en hasta 4 equipos equilibrados (rojo, azul, verde, amarillo).
+2. 10 puertas, cada una con una pregunta facil y 25 segundos. El primer miembro del equipo que responde fija la respuesta de todos; no hay lider.
+3. Si el equipo acierta, gana la llave de su color. Si falla o no responde, un miembro al azar queda eliminado con un mensaje dramatico y el equipo sigue con uno menos.
+4. La ultima puerta (traicion). Cada sobreviviente vota en secreto "salimos todos" o "salgo yo solo":
+   - Nadie traiciona: la puerta se sella y el equipo pasa a la prueba final.
+   - Traiciona uno solo: sale en ese momento y gana; el resto queda eliminado.
+   - Traicionan dos o mas: los traidores se anulan y caen; quienes cooperaron pasan a la prueba final.
+   - Un unico sobreviviente: pasa directo a la prueba final.
+   - Quien no vota a tiempo cuenta como "salimos todos".
+5. Prueba final (1 pregunta, solo para los equipos clasificados). Acertar significa escapar. Fallar o no responder devuelve al equipo al nivel cero: pierde todas sus llaves.
+6. Escapan los equipos que superan la prueba final y el traidor unico de un equipo, si lo hubo.
 
-1. Escriben su nombre.
-2. Se unen a la partida con el codigo de 5 caracteres.
-3. Esperan el inicio.
-4. Responden 5 preguntas (30 segundos cada una).
-5. Reciben puntos y ven su posicion final.
-
-No requieren registro de cuenta.
+Con 10 puertas, un equipo de 7 personas necesita fallar 7 veces para quedar aniquilado, asi que normalmente llega a la ultima puerta con varios sobrevivientes. La votacion de traicion necesita al menos 2 sobrevivientes para tener sentido.
 
 Administrador (laptop, ruta /admin):
 
 - Crea la partida y muestra el codigo QR.
-- Inicia, pausa, reanuda y finaliza la partida.
-- Avanza entre preguntas y muestra la respuesta correcta.
-- Ve participantes conectados, puntuaciones y respuestas en tiempo real.
-- Edita las 5 preguntas, opciones, respuestas correctas y explicaciones.
+- Forma los equipos automaticamente cuando todos entraron.
+- Un solo boton primario guia cada paso: iniciar, cerrar puerta, siguiente puerta, abrir la traicion, cerrar votacion, lanzar prueba final, ver resultado.
+- Pausa y reanuda las puertas; puede terminar la partida en cualquier momento.
+- Ve equipos, miembros, eliminados, votos (solo despues de cerrar la votacion) y respuestas en tiempo real.
+- Correcciones manuales por equipo: eliminar a un miembro al azar o dar una llave.
+- Edita las 11 preguntas (10 puertas + prueba final), sus opciones, respuestas correctas y explicaciones.
 
-Las 5 preguntas son configurables y tratan sobre:
+Las preguntas incluidas son faciles y tratan sobre: mantenimiento y sus tipos (correctivo, adaptativo, perfectivo, preventivo) y los modelos Quick-Fix, Boehm, Osborne, mejora iterativa y orientado a la reutilizacion. Son editables desde /admin.
 
-1. Modelo Quick-Fix
-2. Modelo de Boehm
-3. Modelo de Osborne
-4. Modelo de mejora iterativa
-5. Modelo orientado a la reutilización
+Seguridad
+---------
 
-Puntuacion
-----------
-
-- 100 puntos por respuesta correcta.
-- Hasta 50 puntos adicionales por rapidez.
-- 0 puntos por respuesta incorrecta.
-- Clasificacion automatica con desempate por tiempo acumulado.
+- El navegador solo usa la clave publica. Todo pasa por funciones RPC (SECURITY DEFINER) que validan en el servidor.
+- Las respuestas correctas nunca llegan al telefono; se publican al revelar la puerta.
+- Los votos de traicion no son legibles por nadie hasta que el administrador cierra la votacion.
+- El estado privado de cada equipo se lee con un token por jugador, de modo que un equipo no ve a los demas.
 
 Base de datos (Supabase)
 ------------------------
@@ -95,10 +95,11 @@ Comandos locales
 pnpm dev      Servidor de desarrollo
 pnpm build    Build de producción
 pnpm preview  Previsualizar el build localmente
+pnpm test:sql Prueba el esquema SQL de extremo a extremo (requiere Docker)
 
 Descripcion del repositorio
 ---------------------------
 
 Configura esta descripción en GitHub (Settings -> General -> Description):
 
-Aplicacion web para una dinamica educativa competitiva de 5 minutos y 5 preguntas. Estudiantes responden desde el telefono y el profesor controla la partida desde un panel de administrador. Construido con React, Vite, TypeScript, Tailwind CSS, Supabase, Framer Motion y Lucide React.
+Escape room grupal para una dinamica educativa. Equipos de estudiantes responden desde el telefono, se traicionan o cooperan en la ultima puerta y el profesor controla la partida desde un panel de administrador. Construido con React, Vite, TypeScript, Tailwind CSS, Supabase, Framer Motion y Lucide React.

@@ -43,7 +43,7 @@ function QuestionCard({ q, admin }: { q: AdminQuestion; admin: Admin }) {
   return (
     <section className="card p-6">
       <div className="flex items-center justify-between">
-        <Badge tone="blue">Pregunta {q.pos + 1}</Badge>
+        <Badge tone={q.kind === 'final' ? 'pink' : 'blue'}>{q.kind === 'final' ? 'Prueba final' : `Puerta ${q.pos + 1}`}</Badge>
         {dirty && <Label className="!text-orange">Cambios sin guardar</Label>}
       </div>
       <div className="mt-4 grid gap-4 lg:grid-cols-[220px_1fr]">

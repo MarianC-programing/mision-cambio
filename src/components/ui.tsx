@@ -1,7 +1,4 @@
-import { motion } from 'framer-motion'
-import { Crown } from 'lucide-react'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
-import type { Player } from '../lib/types'
 
 type Variant = 'blue' | 'ink' | 'quiet' | 'lime' | 'danger'
 const VARIANTS: Record<Variant, string> = {
@@ -78,59 +75,6 @@ export function TimerRing({ ms, totalMs, size = 96, paused = false }: { ms: numb
         </span>
       </div>
     </div>
-  )
-}
-
-export function Podium({ players }: { players: Player[] }) {
-  const top = players.slice(0, 3)
-  const slots = [
-    { p: top[1], h: 'h-28', bg: 'bg-pale', rank: 2 },
-    { p: top[0], h: 'h-40', bg: 'bg-lime', rank: 1 },
-    { p: top[2], h: 'h-20', bg: 'bg-orange text-white', rank: 3 },
-  ]
-  return (
-    <div className="flex items-end justify-center gap-3">
-      {slots.map(({ p, h, bg, rank }) => (
-        <div key={rank} className="flex w-1/3 max-w-44 flex-col items-center">
-          {p ? (
-            <>
-              {rank === 1 && <Crown className="mb-1 h-6 w-6 text-yellow" fill="currentColor" />}
-              <p className="mb-2 w-full truncate text-center text-sm font-bold">{p.name}</p>
-            </>
-          ) : (
-            <p className="mb-2 text-sm text-ink/30">—</p>
-          )}
-          <motion.div
-            initial={{ height: 0 }}
-            animate={{ height: 'auto' }}
-            className={`${h} ${bg} flex w-full flex-col items-center justify-start rounded-t-3xl pt-3`}
-          >
-            <span className="display text-4xl">{rank}</span>
-            <span className="label mt-1 opacity-70">{p ? `${p.score} pts` : ''}</span>
-          </motion.div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-export function Leaderboard({ players, meId, limit }: { players: Player[]; meId?: string; limit?: number }) {
-  const rows = limit ? players.slice(0, limit) : players
-  return (
-    <ol className="divide-y divide-line">
-      {rows.map((p, i) => (
-        <li key={p.id} className={`flex items-center gap-3 px-4 py-3 ${p.id === meId ? 'bg-lime/40' : ''}`}>
-          <span className="display w-7 text-xl text-ink/40">{i + 1}</span>
-          <span className="min-w-0 flex-1 truncate font-semibold">
-            {p.name}
-            {p.id === meId && <span className="label ml-2 text-ink/50">tú</span>}
-          </span>
-          <span className="label text-ink/50">{p.correct_count} ✓</span>
-          <span className="display w-16 text-right text-xl tabular-nums">{p.score}</span>
-        </li>
-      ))}
-      {rows.length === 0 && <li className="px-4 py-6 text-center text-sm text-ink/50">Aún no hay participantes.</li>}
-    </ol>
   )
 }
 

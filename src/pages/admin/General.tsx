@@ -1,16 +1,21 @@
-import { QRCodeSVG } from 'qrcode.react'
 import { Plus, Users, Wifi } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 import { Badge, Button, Label, TimerRing } from '../../components/ui'
 import { useCountdown, useServerOffset } from '../../lib/clock'
+import { isTimed, phaseTotalMs } from '../../lib/teams'
 import { STATUS_LABEL, type Admin } from './useAdmin'
 
 const LETTERS = ['A', 'B', 'C', 'D']
 
+/** Milisegundos restantes de la fase en curso (puerta, votación o prueba final). */
 export function useLiveTimer(admin: Admin) {
   const offset = useServerOffset()
   const g = admin.snap?.game
-  const ms = useCountdown(g?.status === 'question' ? (g.ends_at ?? null) : null, offset, g?.status === 'paused' ? (g.paused_remaining_ms ?? 0) : null)
-  return ms
+  return useCountdown(
+    g && isTimed(g.status) ? (g.ends_at ?? null) : null,
+    offset,
+    g?.status === 'paused' ? (g.paused_remaining_ms ?? 0) : null,
+  )
 }
 
 export default function General({ admin }: { admin: Admin }) {
@@ -32,12 +37,32 @@ export default function General({ admin }: { admin: Admin }) {
     )
   }
 
-  const { game, players, answers, questions } = snap
+  const { game, players, group_answers: groupAnswers, groups, questions, finale_votes: votes } = snap
+  const s = game.status
   const joinUrl = `${window.location.origin}/?c=${game.code}`
   const q = questions.find((x) => x.pos === game.q_index)
-  const answered = answers.filter((a) => a.question_pos === game.q_index).length
   const connected = players.filter((p) => admin.online.has(p.id)).length
-  const inQuestion = game.status === 'question' || game.status === 'paused'
+
+  const inDoor = s === 'question' || s === 'paused' || s === 'reveal'
+  const inTrial = s === 'trial' || s === 'trial_reveal'
+  const showQuestion = (inDoor || inTrial) && q
+  const revealed = s === 'reveal' || s === 'trial_reveal'
+  const answering = s === 'question' || s === 'paused' || s === 'trial'
+
+  const expected = inTrial
+    ? groups.filter((g) => g.outcome === 'trap').length
+    : groups.filter((g) => !g.eliminated && g.outcome === null).length
+  const answered = groupAnswers.filter((a) => a.question_pos === game.q_index).length
+
+  const voting = groups.filter((g) => g.outcome === null)
+  const voters = voting.reduce((n, g) => n + g.members.filter((m) => !m.eliminated).length, 0)
+
+  const title =
+    s === 'lobby' ? 'Puerta actual'
+    : s === 'betrayal' || s === 'betrayal_reveal' ? 'La última puerta'
+    : inTrial ? 'Prueba final'
+    : s === 'finished' ? 'Partida terminada'
+    : `Puerta ${game.q_index + 1} de ${game.q_total}`
 
   return (
     <div className="grid gap-5 lg:grid-cols-[380px_1fr]">
@@ -54,7 +79,7 @@ export default function General({ admin }: { admin: Admin }) {
         <div className="grid gap-5 sm:grid-cols-3">
           <div className="card p-5">
             <Label>Estado</Label>
-            <p className="display mt-3 text-2xl leading-tight">{STATUS_LABEL[game.status]}</p>
+            <p className="display mt-3 text-2xl leading-tight">{STATUS_LABEL[s]}</p>
           </div>
           <div className="card flex items-center gap-4 bg-lime p-5">
             <Users className="h-8 w-8" />
@@ -75,66 +100,75 @@ export default function General({ admin }: { admin: Admin }) {
         <section className="card p-6">
           <div className="flex items-start justify-between gap-6">
             <div className="min-w-0">
-              <Label>
-                {game.status === 'lobby' ? 'Puerta actual' : `Puerta ${game.q_index + 1} de ${game.q_total}`}
-              </Label>
-              {q && game.status !== 'lobby' ? (
+              <Label>{title}</Label>
+              {showQuestion ? (
                 <>
                   <div className="mt-2">
-                    <Badge tone="purple">{q.model}</Badge>
+                    <Badge tone={inTrial ? 'pink' : 'purple'}>{q.model}</Badge>
                   </div>
                   <h3 className="display mt-3 text-3xl leading-[1.05] tracking-tight">{q.prompt}</h3>
                 </>
+              ) : s === 'betrayal' ? (
+                <p className="display mt-3 text-3xl leading-[1.05]">Los sobrevivientes votan: ¿salimos todos o salgo yo solo?</p>
+              ) : s === 'betrayal_reveal' ? (
+                <p className="display mt-3 text-3xl leading-[1.05]">Mira el resultado de cada equipo en «Grupos».</p>
               ) : (
-                <p className="display mt-3 text-3xl text-ink/30">Aún no ha comenzado</p>
+                <p className="display mt-3 text-3xl text-ink/30">{s === 'finished' ? 'Revisa el resultado en «Ranking»' : 'Aún no ha comenzado'}</p>
               )}
             </div>
-            {game.status !== 'lobby' && game.status !== 'finished' && game.status !== 'reveal' && (
+            {(answering || s === 'betrayal') && (
               <div className="text-center">
-                <TimerRing ms={ms} totalMs={game.duration_ms} size={128} paused={game.status === 'paused'} />
-                <Label className="mt-2 block">Tiempo para escapar</Label>
+                <TimerRing ms={ms} totalMs={phaseTotalMs(game)} size={128} paused={s === 'paused'} />
+                <Label className="mt-2 block">{s === 'betrayal' ? 'Tiempo para votar' : 'Tiempo para escapar'}</Label>
               </div>
             )}
           </div>
 
-          {q && game.status !== 'lobby' && (
+          {showQuestion && (
             <div className="mt-5 grid gap-2 sm:grid-cols-2">
               {q.options.map((o, i) => {
-                const show = game.status === 'reveal' || game.status === 'finished'
                 const ok = i === q.correct_index
                 return (
                   <div
                     key={i}
                     className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold ${
-                      ok ? (show ? 'bg-lime' : 'bg-lime/40') : 'bg-pale'
+                      ok ? (revealed ? 'bg-lime' : 'bg-lime/40') : 'bg-pale'
                     }`}
                   >
                     <span className="grid h-7 w-7 place-items-center rounded-lg bg-ink font-mono text-xs text-white">{LETTERS[i]}</span>
                     <span className="flex-1">{o}</span>
-                    {game.reveal && game.status === 'reveal' && (
-                      <span className="label text-ink/60">{game.reveal.counts[i] ?? 0}</span>
-                    )}
+                    {game.reveal && revealed && <span className="label text-ink/60">{game.reveal.counts[i] ?? 0}</span>}
                   </div>
                 )
               })}
             </div>
           )}
-          {inQuestion && (
-            <div className="mt-5">
-              <div className="mb-1.5 flex justify-between">
-                <Label>Respuestas recibidas</Label>
-                <Label>
-                  {answered} / {players.length}
-                </Label>
-              </div>
-              <div className="h-2.5 overflow-hidden rounded-full bg-pale">
-                <div className="h-full rounded-full bg-blue transition-all" style={{ width: `${players.length ? (answered / players.length) * 100 : 0}%` }} />
-              </div>
-              <p className="mt-2 text-xs text-ink/45">La opción con fondo verde claro es la correcta (solo tú la ves).</p>
-            </div>
+
+          {answering && showQuestion && (
+            <Progress label="Equipos que respondieron" value={answered} total={expected} note="La opción con fondo verde claro es la correcta (solo tú la ves)." />
+          )}
+          {s === 'betrayal' && (
+            <Progress label="Votos emitidos" value={votes.filter((v) => voting.some((g) => g.id === v.group_id)).length} total={voters} note="Los votos son secretos hasta que cierres la votación." />
           )}
         </section>
       </div>
+    </div>
+  )
+}
+
+function Progress({ label, value, total, note }: { label: string; value: number; total: number; note: string }) {
+  return (
+    <div className="mt-5">
+      <div className="mb-1.5 flex justify-between">
+        <Label>{label}</Label>
+        <Label>
+          {value} / {total}
+        </Label>
+      </div>
+      <div className="h-2.5 overflow-hidden rounded-full bg-pale">
+        <div className="h-full rounded-full bg-blue transition-all" style={{ width: `${total ? Math.min(100, (value / total) * 100) : 0}%` }} />
+      </div>
+      <p className="mt-2 text-xs text-ink/45">{note}</p>
     </div>
   )
 }

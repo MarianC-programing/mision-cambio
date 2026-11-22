@@ -5,6 +5,7 @@ import { adminQuestions } from '../lib/api'
 import Answers from './admin/Answers'
 import Control from './admin/Control'
 import General from './admin/General'
+import Groups from './admin/Groups'
 import Participants from './admin/Participants'
 import Questions from './admin/Questions'
 import Ranking from './admin/Ranking'
@@ -15,6 +16,7 @@ const TABS = [
   ['general', 'General'],
   ['control', 'Control'],
   ['participantes', 'Participantes'],
+  ['grupos', 'Grupos'],
   ['respuestas', 'Respuestas'],
   ['ranking', 'Ranking'],
   ['preguntas', 'Preguntas'],
@@ -127,6 +129,7 @@ function Dashboard({ pin, onLogout }: { pin: string; onLogout: () => void }) {
         {tab === 'general' && <General admin={admin} />}
         {tab === 'control' && <Control admin={admin} />}
         {tab === 'participantes' && <Participants admin={admin} />}
+        {tab === 'grupos' && <Groups admin={admin} />}
         {tab === 'respuestas' && <Answers admin={admin} />}
         {tab === 'ranking' && <Ranking admin={admin} />}
         {tab === 'preguntas' && <Questions admin={admin} />}
