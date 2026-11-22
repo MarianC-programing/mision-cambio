@@ -108,18 +108,22 @@ option { background: #17171a; color: #fff; }
 .hero-video::-webkit-media-controls-overlay-play-button,
 .hero-video::-webkit-media-controls-panel { display: none !important; -webkit-appearance: none; opacity: 0; }
 
-/* Título del hero: wordmark pixel en minúsculas con scanlines (CRT), como la referencia. */
+/* Título del hero: wordmark gigante en pixel, 2 líneas, centrado. */
 .t-wordmark {
-  font-family: "Pixelify Sans", "Press Start 2P", ui-monospace, monospace;
-  font-weight: 600;
-  font-size: clamp(3.4rem, 19.5vw, 6.9rem);
-  line-height: 1.02;
-  letter-spacing: 0.015em;
-  text-transform: none;
-  -webkit-font-smoothing: none;
-  color: #fff;
-  /* Líneas horizontales finas que dejan ver el arte a través de las letras. */
-  -webkit-mask-image: repeating-linear-gradient(to bottom, #000 0, #000 var(--scan, 5px), transparent var(--scan, 5px), transparent calc(var(--scan, 5px) + var(--slit, 1.5px)));
-          mask-image: repeating-linear-gradient(to bottom, #000 0, #000 var(--scan, 5px), transparent var(--scan, 5px), transparent calc(var(--scan, 5px) + var(--slit, 1.5px)));
+  font-size: clamp(2.3rem, 11.4vw, 7.5rem);
+  line-height: 1.12;
+  letter-spacing: 0.07em;
+  text-shadow: 0 0.06em 0 rgb(0 0 0 / 0.7), 0 0 0.6em rgb(0 0 0 / 0.35);
 }
-.wordmark-wrap { filter: drop-shadow(0 2px 14px rgb(0 0 0 / 0.35)); --scan: clamp(3px, 0.05em, 5.5px); --slit: clamp(0.8px, 0.011em, 1.4px); font-size: 1em; }
+/* Press Start 2P no trae la Ó mayúscula: se dibuja el acento con píxeles. */
+.accent-o { position: relative; display: inline-block; }
+.accent-o::after {
+  content: "";
+  position: absolute;
+  left: 0.5em;
+  top: -0.06em;
+  width: 0.125em;
+  height: 0.125em;
+  background: currentColor;
+  box-shadow: 0.125em -0.125em 0 currentColor;
+}
