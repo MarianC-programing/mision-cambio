@@ -114,6 +114,18 @@ La app será una SPA; `vercel.json` ya incluye el rewrite de rutas para que
 
 ---
 
+### Si a los participantes les pide iniciar sesión o crear una cuenta
+
+Pasa cuando se comparte un **enlace de despliegue individual** de Vercel (los que tienen
+un código en medio, tipo `mision-cambio-abc123-usuario.vercel.app`): esos traen
+*Vercel Authentication* activa y muestran el inicio de sesión de Vercel.
+
+- El QR y el enlace del panel admin ya usan siempre el dominio público
+  `https://mision-cambio.vercel.app`, aunque abras el panel desde otra dirección.
+  Si usas un dominio propio, define `VITE_PUBLIC_URL` en Vercel y vuelve a desplegar.
+- Comparte solo ese dominio. Para que cualquier enlace de despliegue también sea público:
+  Vercel → Project → Settings → **Deployment Protection** → desactiva *Vercel Authentication*.
+
 ## 5. Flujo de uso en la exposición
 
 ### Participantes (teléfono)

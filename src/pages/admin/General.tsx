@@ -2,6 +2,7 @@ import { Plus, Users, Wifi } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { Badge, Button, Label, TimerRing } from '../../components/ui'
 import { useCountdown, useServerOffset } from '../../lib/clock'
+import { joinLink } from '../../lib/links'
 import { isTimed, phaseTotalMs } from '../../lib/teams'
 import { STATUS_LABEL, type Admin } from './useAdmin'
 
@@ -39,7 +40,7 @@ export default function General({ admin }: { admin: Admin }) {
 
   const { game, players, group_answers: groupAnswers, groups, questions, finale_votes: votes } = snap
   const s = game.status
-  const joinUrl = `${window.location.origin}/unirse?c=${game.code}`
+  const joinUrl = joinLink(game.code)
   const q = questions.find((x) => x.pos === game.q_index)
   const connected = players.filter((p) => admin.online.has(p.id)).length
 
