@@ -1,18 +1,8 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import {
-  Check,
-  Handshake,
-  Key,
-  LogOut,
-  Pause,
-  ShieldAlert,
-  Skull,
-  Swords,
-  Trophy,
-  Zap,
-} from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Logo, LogoTile, PixelIcon, type PixelName } from '../components/pixel'
 import { Badge, Button, Label, TimerRing } from '../components/ui'
 import { ApiError, myGroupState, submitGroupAnswer, submitVote } from '../lib/api'
 import { clearSession, loadSession, useCountdown, useServerOffset } from '../lib/clock'
@@ -21,7 +11,6 @@ import { dramatize, isTimed, phaseTotalMs, survivors, teamHex, teamName } from '
 import type { Game, Group, GroupMember, GroupState, Session, Vote } from '../lib/types'
 
 const LETTERS = ['A', 'B', 'C', 'D']
-const LETTER_BG = ['bg-pink', 'bg-purple', 'bg-blue', 'bg-orange']
 
 interface Ctx {
   session: Session
@@ -36,7 +25,7 @@ interface Ctx {
 
 export default function Play() {
   const session = useMemo(loadSession, [])
-  if (!session) return <Navigate to="/" replace />
+  if (!session) return <Navigate to="/unirse" replace />
   return <PlayInner session={session} />
 }
 
@@ -98,7 +87,7 @@ function PlayInner({ session }: { session: Session }) {
   if (!game || !gs) {
     return (
       <Screen>
-        <p className="m-auto text-ink/50">Conectando…</p>
+        <p className="pixel m-auto animate-pulse text-[10px] text-ink/50">Forzando la cerradura…</p>
       </Screen>
     )
   }
@@ -148,15 +137,26 @@ function PlayInner({ session }: { session: Session }) {
 /* Piezas compartidas                                                  */
 /* ------------------------------------------------------------------ */
 
+/** Móvil: columna estrecha. Tablet y escritorio: se expande (las vistas de pregunta usan dos columnas). */
 function Screen({ children, code, onLeave }: { children: ReactNode; code?: string; onLeave?: () => void }) {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col px-5 pt-5 safe-b">
+    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pt-5 safe-b md:max-w-3xl md:px-8 md:pt-8 lg:max-w-6xl">
       {code && (
-        <header className="mb-5 flex items-center justify-between">
-          <Badge>Código {code}</Badge>
-          <button onClick={onLeave} className="grid h-9 w-9 place-items-center rounded-full bg-pale text-ink/60" aria-label="Salir">
-            <LogOut className="h-4 w-4" />
-          </button>
+        <header className="mb-5 flex items-center justify-between gap-3 md:mb-8">
+          <Link to="/" className="flex items-center gap-3" aria-label="Inicio">
+            <LogoTile className="h-10 w-10" />
+            <span className="pixel hidden text-[10px] sm:inline">Misión: Cambio</span>
+          </Link>
+          <div className="flex items-center gap-3">
+            <Badge>Código {code}</Badge>
+            <button
+              onClick={onLeave}
+              className="grid h-10 w-10 place-items-center rounded-full border border-line bg-pale text-ink/60 transition hover:text-ink"
+              aria-label="Salir"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
         </header>
       )}
       {children}
@@ -164,11 +164,16 @@ function Screen({ children, code, onLeave }: { children: ReactNode; code?: strin
   )
 }
 
+/** Contenedor centrado para las vistas que no necesitan dos columnas. */
+function Narrow({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <div className={`mx-auto flex w-full max-w-xl flex-1 flex-col ${className}`}>{children}</div>
+}
+
 function TeamChip({ color }: { color?: string | null }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3 py-1.5">
+    <span className="inline-flex items-center gap-2 rounded-full border border-line bg-pale px-3 py-1.5">
       <span className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: teamHex(color) }} />
-      <span className="label text-ink/70">Equipo {teamName(color)}</span>
+      <span className="label text-[9px] text-ink/70">Equipo {teamName(color)}</span>
     </span>
   )
 }
@@ -176,16 +181,16 @@ function TeamChip({ color }: { color?: string | null }) {
 function KeyBar({ ctx }: { ctx: Ctx }) {
   const have = new Set(ctx.gs.keys.map((k) => k.question_pos))
   const color = ctx.grp?.color
-  const icon = color === 'yellow' ? 'text-ink' : 'text-white'
+  const icon = color === 'yellow' ? 'text-black' : 'text-white'
   return (
     <div className="flex flex-wrap items-center justify-center gap-1.5" aria-label={`${have.size} llaves`}>
       {Array.from({ length: ctx.game.q_total }, (_, i) => (
         <span
           key={i}
-          className={`grid h-5 w-5 place-items-center rounded-md border ${have.has(i) ? 'border-transparent' : 'border-line bg-pale'}`}
+          className={`grid h-6 w-6 place-items-center rounded-md border ${have.has(i) ? 'border-transparent' : 'border-line bg-pale'}`}
           style={have.has(i) ? { backgroundColor: teamHex(color) } : undefined}
         >
-          {have.has(i) && <Key className={`h-3 w-3 ${icon}`} />}
+          {have.has(i) && <PixelIcon name="key" className={`h-3.5 w-3.5 ${icon}`} />}
         </span>
       ))}
     </div>
@@ -202,36 +207,41 @@ function MemberChips({ members, meId }: { members: GroupMember[]; meId: string }
             m.eliminated
               ? 'border-pink/30 bg-pink/10 text-pink line-through decoration-pink/40'
               : m.escaped
-                ? 'border-lime bg-lime/50 text-ink'
+                ? 'border-lime/60 bg-lime/15 text-lime'
                 : 'border-line bg-pale text-ink'
           }`}
         >
           {m.player_name}
-          {m.player_id === meId && <span className="label ml-1.5 !text-[9px] opacity-60">tú</span>}
+          {m.player_id === meId && <span className="label ml-1.5 !text-[8px] opacity-60">tú</span>}
         </span>
       ))}
     </div>
   )
 }
 
+type Tone = 'ink' | 'pink' | 'lime' | 'blue'
+const TONE_TEXT: Record<Tone, string> = { ink: 'text-ink', pink: 'text-pink', lime: 'text-lime', blue: 'text-ink' }
+
 function Status({ icon, label, title, children, tone = 'ink' }: {
-  icon: ReactNode
+  icon: PixelName | 'logo'
   label: string
   title: string
   children?: ReactNode
-  tone?: 'ink' | 'pink' | 'lime' | 'blue'
+  tone?: Tone
 }) {
-  const color = { ink: 'text-ink', pink: 'text-pink', lime: 'text-ink', blue: 'text-blue' }[tone]
+  const color = TONE_TEXT[tone]
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex flex-1 flex-col items-center justify-center p-4 text-center"
+      className="mx-auto flex w-full max-w-xl flex-1 flex-col items-center justify-center p-4 text-center"
     >
-      <div className={`mb-4 ${color}`}>{icon}</div>
-      <Label className="mb-2 block">{label}</Label>
-      <h1 className={`display text-5xl ${color}`}>{title}</h1>
-      <div className="mt-5 w-full space-y-4 text-ink/60">{children}</div>
+      <div className={`mb-6 ${color}`}>
+        {icon === 'logo' ? <Logo className="h-16 w-16 md:h-20 md:w-20" /> : <PixelIcon name={icon} className="h-14 w-14 md:h-16 md:w-16" />}
+      </div>
+      <Label className="mb-4 block">{label}</Label>
+      <h1 className={`pixel text-[clamp(1.05rem,5vw,2.25rem)] ${color}`}>{title}</h1>
+      <div className="mt-6 w-full space-y-4 text-ink/60 md:text-lg">{children}</div>
     </motion.div>
   )
 }
@@ -244,34 +254,34 @@ function LobbyView({ ctx }: { ctx: Ctx }) {
   const { grp, gs, session, game } = ctx
   if (!grp) {
     return (
-      <Status icon={<Zap className="h-12 w-12 animate-pulse" />} label="Formando equipos…" title="MISIÓN cambio.">
-        <p>El administrador está repartiendo los equipos. En unos segundos verás el tuyo.</p>
+      <Status icon="lock" label="Formando equipos…" title="Misión: Cambio">
+        <p>El profesor está repartiendo los equipos. En unos segundos sabrás con quién te toca sufrir.</p>
       </Status>
     )
   }
   return (
-    <div className="flex flex-1 flex-col items-center justify-center p-4 text-center">
+    <Narrow className="items-center justify-center p-4 text-center">
       <div
-        className="mb-5 h-20 w-20 rounded-full ring-8 ring-white"
+        className="mb-6 h-20 w-20 rounded-full ring-8 ring-canvas"
         style={{ backgroundColor: teamHex(grp.color), boxShadow: `0 0 0 2px ${teamHex(grp.color)}` }}
       />
       <Label>Tu equipo</Label>
-      <h1 className="display mt-2 text-6xl" style={{ color: teamHex(grp.color) }}>
+      <h1 className="pixel mt-4 text-[clamp(1.4rem,7vw,3rem)]" style={{ color: teamHex(grp.color) }}>
         {teamName(grp.color)}
       </h1>
-      <p className="mt-3 text-sm text-ink/60">{gs.members.length} integrantes · {game.q_total} puertas</p>
+      <p className="mt-4 text-sm text-ink/60">{gs.members.length} integrantes · {game.q_total} puertas</p>
       <div className="mt-6">
         <MemberChips members={gs.members} meId={session.playerId} />
       </div>
-      <div className="card mt-8 w-full p-5 text-left text-sm leading-relaxed text-ink/70">
+      <div className="card mt-8 w-full p-5 text-left text-sm leading-relaxed text-ink/70 md:text-base">
         <p>
           <b className="text-ink">El primero de ustedes que responda</b> decide por todo el equipo. Si fallan o se acaba el
           tiempo, la puerta se cobra a uno de ustedes.
         </p>
-        <p className="mt-2">Y al final espera una última puerta que pondrá a prueba su confianza…</p>
+        <p className="mt-2">Y al final espera una última puerta que pondrá a prueba su confianza… y su amistad.</p>
       </div>
-      <p className="mt-auto pt-8 text-xs text-ink/40">Esperando que el administrador abra la primera puerta…</p>
-    </div>
+      <p className="mt-auto pt-8 text-xs text-ink/40">Respira. Mira a tu equipo. Decide a quién vigilar. La primera puerta está por abrirse…</p>
+    </Narrow>
   )
 }
 
@@ -310,75 +320,81 @@ function QuestionView({ ctx, trial = false }: { ctx: Ctx; trial?: boolean }) {
   }
 
   return (
-    <div className="flex flex-1 flex-col">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="space-y-2">
-          <TeamChip color={grp?.color} />
-          <div>
-            <Label>{trial ? 'Prueba final' : `Puerta ${game.q_index + 1} de ${game.q_total}`}</Label>
-            <div className="mt-1.5">
-              <Badge tone={trial ? 'pink' : 'purple'}>{q.model}</Badge>
+    <div className="flex flex-1 flex-col lg:grid lg:grid-cols-2 lg:items-center lg:gap-16">
+      <div>
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="space-y-2.5">
+            <TeamChip color={grp?.color} />
+            <div>
+              <Label>{trial ? 'Prueba final' : `Puerta ${game.q_index + 1} de ${game.q_total}`}</Label>
+              <div className="mt-2">
+                <Badge tone={trial ? 'pink' : 'purple'}>{q.model}</Badge>
+              </div>
             </div>
           </div>
+          <TimerRing ms={remaining} totalMs={phaseTotalMs(game)} size={84} />
         </div>
-        <TimerRing ms={remaining} totalMs={phaseTotalMs(game)} size={76} />
-      </div>
 
-      {trial && (
-        <p className="mb-2 rounded-2xl bg-pink/10 px-4 py-2.5 text-center text-xs font-semibold text-pink">
-          Si fallan, vuelven al nivel cero y pierden todas las llaves.
-        </p>
-      )}
-
-      <AnimatePresence mode="wait">
-        <motion.h2
-          key={q.index}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="display mt-4 text-[26px] leading-[1.05] tracking-tight"
-        >
-          {q.prompt}
-        </motion.h2>
-      </AnimatePresence>
-
-      <div className="mt-5 space-y-3">
-        {q.options.map((text, i) => {
-          const mine = chosen === i || pending === i
-          return (
-            <motion.button
-              key={i}
-              whileTap={canAnswer ? { scale: 0.98 } : undefined}
-              onClick={() => void choose(i)}
-              disabled={!canAnswer}
-              className={`flex w-full items-center gap-3 rounded-3xl border-2 p-4 text-left transition disabled:cursor-default ${
-                mine ? 'border-blue bg-blue/10' : 'border-line bg-white'
-              } ${!canAnswer && !mine ? 'opacity-50' : ''}`}
-            >
-              <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl font-mono text-sm font-bold text-white ${LETTER_BG[i]}`}>
-                {LETTERS[i]}
-              </span>
-              <span className="flex-1 text-[15px] font-semibold leading-snug">{text}</span>
-              {mine && <Check className="h-5 w-5 text-blue" />}
-            </motion.button>
-          )
-        })}
-      </div>
-
-      <div className="mt-auto space-y-3 pt-4">
-        {error && <p className="rounded-2xl bg-pink/10 px-4 py-3 text-sm font-medium text-pink">{error}</p>}
-        {answered ? (
-          <p className="rounded-2xl bg-blue/10 px-4 py-3 text-center text-sm font-semibold">
-            Su equipo eligió <b>{chosen !== null ? LETTERS[chosen] : '?'}</b>
-            {gs.answered_by ? ` (respondió ${gs.answered_by})` : ''}. Esperando el resultado…
+        {trial && (
+          <p className="mb-2 rounded-2xl border border-pink/30 bg-pink/10 px-4 py-2.5 text-center text-xs font-semibold text-pink">
+            Si fallan, vuelven al nivel cero y pierden todas las llaves. Sin presión.
           </p>
-        ) : timeUp ? (
-          <p className="rounded-2xl bg-orange/15 px-4 py-3 text-center text-sm font-semibold text-orange">
-            Se acabó el tiempo. Su equipo no respondió.
-          </p>
-        ) : (
-          <p className="text-center text-xs text-ink/45">El primero que responda decide por todo el equipo.</p>
         )}
-        {!trial && <KeyBar ctx={ctx} />}
+
+        <AnimatePresence mode="wait">
+          <motion.h2
+            key={q.index}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="display mt-4 text-[26px] leading-[1.08] tracking-tight md:text-4xl lg:text-[46px]"
+          >
+            {q.prompt}
+          </motion.h2>
+        </AnimatePresence>
+      </div>
+
+      <div className="flex flex-1 flex-col lg:flex-none">
+        <div className="mt-5 space-y-3 md:mt-8 lg:mt-0">
+          {q.options.map((text, i) => {
+            const mine = chosen === i || pending === i
+            return (
+              <motion.button
+                key={i}
+                whileTap={canAnswer ? { scale: 0.98 } : undefined}
+                onClick={() => void choose(i)}
+                disabled={!canAnswer}
+                className={`flex w-full items-center gap-3 rounded-3xl border-2 p-4 text-left transition disabled:cursor-default md:p-5 ${
+                  mine ? 'border-lime bg-lime/10' : 'border-line bg-pale enabled:hover:border-white/30'
+                } ${!canAnswer && !mine ? 'opacity-50' : ''}`}
+              >
+                <span
+                  className={`pixel grid h-10 w-10 shrink-0 place-items-center rounded-xl text-xs ${mine ? 'bg-lime text-black' : 'bg-white/10 text-ink'}`}
+                >
+                  {LETTERS[i]}
+                </span>
+                <span className="flex-1 text-[15px] font-semibold leading-snug md:text-lg">{text}</span>
+                {mine && <PixelIcon name="check" className="h-4 w-4 text-lime" />}
+              </motion.button>
+            )
+          })}
+        </div>
+
+        <div className="mt-auto space-y-3 pt-4 lg:mt-6">
+          {error && <p className="rounded-2xl border border-pink/30 bg-pink/10 px-4 py-3 text-sm font-medium text-pink">{error}</p>}
+          {answered ? (
+            <p className="rounded-2xl border border-lime/40 bg-lime/10 px-4 py-3 text-center text-sm font-semibold">
+              Su equipo eligió <b>{chosen !== null ? LETTERS[chosen] : '?'}</b>
+              {gs.answered_by ? ` (respondió ${gs.answered_by})` : ''}. Ahora a rezar…
+            </p>
+          ) : timeUp ? (
+            <p className="rounded-2xl border border-orange/40 bg-orange/10 px-4 py-3 text-center text-sm font-semibold text-orange">
+              Se acabó el tiempo. Su equipo no respondió. La puerta tiene hambre.
+            </p>
+          ) : (
+            <p className="text-center text-xs text-ink/45">El primero que responda decide por todo el equipo. Sí, incluso si se equivoca.</p>
+          )}
+          {!trial && <KeyBar ctx={ctx} />}
+        </div>
       </div>
     </div>
   )
@@ -386,10 +402,10 @@ function QuestionView({ ctx, trial = false }: { ctx: Ctx; trial?: boolean }) {
 
 function PausedView({ ctx }: { ctx: Ctx }) {
   return (
-    <Status icon={<Pause className="h-12 w-12" />} label="Puerta en pausa" title="Pausa">
-      <p>El administrador detuvo el tiempo.</p>
+    <Status icon="pause" label="Puerta en pausa" title="Pausa">
+      <p>El profesor detuvo el tiempo. Aprovecha para pensar… o para sospechar.</p>
       <div className="flex justify-center">
-        <TimerRing ms={ctx.remaining} totalMs={phaseTotalMs(ctx.game)} size={96} paused />
+        <TimerRing ms={ctx.remaining} totalMs={phaseTotalMs(ctx.game)} size={104} paused />
       </div>
     </Status>
   )
@@ -400,9 +416,9 @@ function SpectatorView({ ctx }: { ctx: Ctx }) {
   const { me, gs, game, session } = ctx
   const alive = survivors(gs)
   return (
-    <Status icon={<Skull className="h-14 w-14" />} label="Estás eliminado" title="Fuera de juego" tone="pink">
+    <Status icon="skull" label="Estás eliminado" title="Fuera de juego" tone="pink">
       {me?.elimination_reason && <p className="font-semibold text-pink">{me.elimination_reason}</p>}
-      <p>Tu equipo sigue luchando sin ti{game.status === 'question' ? ` en la puerta ${game.q_index + 1}` : ''}.</p>
+      <p>Tu equipo sigue luchando sin ti{game.status === 'question' ? ` en la puerta ${game.q_index + 1}` : ''}. Anima desde el más allá.</p>
       <div className="card p-5">
         <Label>Siguen en pie ({alive.length})</Label>
         <div className="mt-3">
@@ -428,30 +444,30 @@ function RevealView({ ctx }: { ctx: Ctx }) {
   const others = thisDoor.filter((e) => e.player_id !== session.playerId)
 
   return (
-    <div className="flex flex-1 flex-col">
+    <Narrow>
       <div className="mb-3 flex items-center justify-between">
         <TeamChip color={grp?.color} />
         <Label>Puerta {game.q_index + 1} de {game.q_total}</Label>
       </div>
 
-      <div className="rounded-3xl bg-lime p-5">
+      <div className="rounded-3xl bg-lime p-5 text-black md:p-6">
         <div className="flex items-center gap-3">
-          <Check className="h-6 w-6" />
+          <PixelIcon name="check" className="h-5 w-5" />
           <span className="font-bold">Respuesta correcta: {LETTERS[rv.correct_index]}</span>
         </div>
-        <p className="mt-2 text-sm leading-relaxed text-ink/70">{rv.explanation}</p>
+        <p className="mt-2 text-sm leading-relaxed text-black/70 md:text-base">{rv.explanation}</p>
       </div>
 
       <div className="mt-4 space-y-3">
         {correct ? (
           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="rounded-3xl border-2 p-5 text-center" style={{ borderColor: teamHex(grp?.color) }}>
-            <Key className="mx-auto mb-2 h-9 w-9" style={{ color: teamHex(grp?.color) }} />
-            <p className="text-lg font-bold">¡Ganaron la llave {teamName(grp?.color)}!</p>
-            <p className="text-sm text-ink/55">Nadie cae en esta puerta.</p>
+            <PixelIcon name="key" className="mx-auto mb-3 h-9 w-9" />
+            <p className="text-lg font-bold" style={{ color: teamHex(grp?.color) }}>¡Ganaron la llave {teamName(grp?.color)}!</p>
+            <p className="text-sm text-ink/55">Nadie cae en esta puerta. Disfruten, no durará.</p>
           </motion.div>
         ) : (
-          <div className="rounded-3xl border border-pink/20 bg-pink/10 p-5 text-center">
-            <ShieldAlert className="mx-auto mb-2 h-9 w-9 text-pink" />
+          <div className="rounded-3xl border border-pink/30 bg-pink/10 p-5 text-center">
+            <PixelIcon name="shield" className="mx-auto mb-3 h-9 w-9 text-pink" />
             <p className="text-lg font-bold text-pink">{choice === null ? 'No respondieron a tiempo' : 'Fallaron esta puerta'}</p>
             <p className="text-sm text-ink/55">La puerta se cobra a uno de ustedes.</p>
           </div>
@@ -461,12 +477,12 @@ function RevealView({ ctx }: { ctx: Ctx }) {
           <motion.div
             initial={{ opacity: 0, scale: 0.85 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="rounded-3xl bg-ink p-6 text-center text-white"
+            className="rounded-3xl border border-pink/40 bg-pink/10 p-6 text-center"
           >
-            <Skull className="mx-auto mb-3 h-12 w-12 text-pink" />
-            <Label className="!text-white/60">Eres el elegido</Label>
-            <p className="display mt-2 text-3xl text-pink">{thisDoor.find((e) => e.player_id === session.playerId)?.reason}</p>
-            <p className="mt-3 text-sm text-white/60">Miras el resto desde fuera.</p>
+            <PixelIcon name="skull" className="mx-auto mb-4 h-12 w-12 text-pink" />
+            <Label className="!text-ink/60">Eres el elegido</Label>
+            <p className="display mt-3 text-3xl text-pink">{thisDoor.find((e) => e.player_id === session.playerId)?.reason}</p>
+            <p className="mt-3 text-sm text-ink/60">Miras el resto desde fuera.</p>
           </motion.div>
         )}
         {others.map((e) => (
@@ -474,19 +490,19 @@ function RevealView({ ctx }: { ctx: Ctx }) {
             key={e.player_id}
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
-            className="rounded-2xl bg-pink/10 px-4 py-3 text-center text-sm font-bold text-pink"
+            className="rounded-2xl border border-pink/30 bg-pink/10 px-4 py-3 text-center text-sm font-bold text-pink"
           >
-            💀 {dramatize(e.player_name, e.reason)}
+            {dramatize(e.player_name, e.reason)}
           </motion.p>
         ))}
         {meElim && !iFell && me && <p className="text-center text-xs text-ink/45">Sigues fuera de juego.</p>}
       </div>
 
-      <div className="mt-auto space-y-3 pt-4">
+      <div className="mt-auto space-y-3 pt-6">
         <KeyBar ctx={ctx} />
         <p className="text-center text-xs text-ink/40">Siguen en pie: {survivors(gs).length} de {gs.members.length}</p>
       </div>
-    </div>
+    </Narrow>
   )
 }
 
@@ -503,21 +519,21 @@ function BetrayalView({ ctx }: { ctx: Ctx }) {
 
   if (grp?.outcome === 'wiped' || (alive === 0 && grp)) {
     return (
-      <Status icon={<Skull className="h-14 w-14" />} label="La última puerta" title="Su equipo cayó" tone="pink">
-        <p>No queda nadie para llegar hasta aquí.</p>
+      <Status icon="skull" label="La última puerta" title="Su equipo cayó" tone="pink">
+        <p>No queda nadie para llegar hasta aquí. Qué silencio.</p>
       </Status>
     )
   }
   if (meElim) {
     return (
-      <Status icon={<Swords className="h-14 w-14" />} label="La última puerta" title="Votan sin ti" tone="pink">
-        <p>Quedan {alive} con vida y deciden en secreto. Tú ya no puedes votar.</p>
+      <Status icon="sword" label="La última puerta" title="Votan sin ti" tone="pink">
+        <p>Quedan {alive} con vida y deciden en secreto. Tú ya no puedes votar. Solo puedes mirar y juzgar.</p>
       </Status>
     )
   }
   if (grp?.outcome === 'trap') {
     return (
-      <Status icon={<Key className="h-14 w-14" />} label="La última puerta" title="Estás solo" tone="blue">
+      <Status icon="key" label="La última puerta" title="Estás solo" tone="ink">
         <p>Eres el único que sigue vivo en tu equipo: nadie a quien traicionar, nadie que te traicione.</p>
         <p className="font-semibold text-ink">Pasas directo a la prueba final.</p>
       </Status>
@@ -540,64 +556,69 @@ function BetrayalView({ ctx }: { ctx: Ctx }) {
   const current = pending ?? gs.my_vote
 
   return (
-    <div className="flex flex-1 flex-col">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="space-y-2">
-          <TeamChip color={grp?.color} />
-          <Label className="block">La última puerta</Label>
+    <div className="flex flex-1 flex-col lg:grid lg:grid-cols-2 lg:items-center lg:gap-16">
+      <div>
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="space-y-2.5">
+            <TeamChip color={grp?.color} />
+            <Label className="block">La última puerta</Label>
+          </div>
+          <TimerRing ms={remaining} totalMs={phaseTotalMs(game)} size={84} />
         </div>
-        <TimerRing ms={remaining} totalMs={phaseTotalMs(game)} size={76} />
+
+        <h2 className="pixel mt-5 text-[clamp(1.1rem,5.4vw,2.4rem)] leading-snug">
+          Solo una puerta. <span className="text-ink/45">¿Confías en ellos?</span>
+        </h2>
+        <p className="mt-4 text-sm leading-relaxed text-ink/60 md:text-base">
+          Cada uno vota <b className="text-ink">en secreto</b>. Lo que pase depende de cuántos de ustedes traicionen. Mira a tus
+          compañeros a los ojos. O mejor no.
+        </p>
       </div>
 
-      <h2 className="display mt-3 text-[34px] leading-[1]">
-        Solo una puerta. <span className="serif-i text-pink">¿Confías en ellos?</span>
-      </h2>
-      <p className="mt-3 text-sm leading-relaxed text-ink/60">
-        Cada uno vota <b className="text-ink">en secreto</b>. Lo que pase depende de cuántos de ustedes traicionen.
-      </p>
+      <div className="flex flex-1 flex-col lg:flex-none">
+        <div className="mt-5 space-y-3 lg:mt-0">
+          <motion.button
+            whileTap={!timeUp ? { scale: 0.98 } : undefined}
+            disabled={timeUp}
+            onClick={() => void vote('share')}
+            className={`flex w-full items-center gap-4 rounded-3xl border-2 p-5 text-left transition disabled:cursor-default ${
+              current === 'share' ? 'border-lime bg-lime/10' : 'border-line bg-pale enabled:hover:border-white/30'
+            } ${timeUp && current !== 'share' ? 'opacity-50' : ''}`}
+          >
+            <Logo className="h-10 w-10 shrink-0" />
+            <span>
+              <span className="block text-lg font-extrabold">Salimos todos</span>
+              <span className="text-sm text-ink/55">Cooperar con el equipo.</span>
+            </span>
+            {current === 'share' && <PixelIcon name="check" className="ml-auto h-4 w-4 text-lime" />}
+          </motion.button>
 
-      <div className="mt-5 space-y-3">
-        <motion.button
-          whileTap={!timeUp ? { scale: 0.98 } : undefined}
-          disabled={timeUp}
-          onClick={() => void vote('share')}
-          className={`flex w-full items-center gap-4 rounded-3xl border-2 p-5 text-left transition disabled:cursor-default ${
-            current === 'share' ? 'border-blue bg-blue/10' : 'border-line bg-white'
-          } ${timeUp && current !== 'share' ? 'opacity-50' : ''}`}
-        >
-          <Handshake className="h-9 w-9 shrink-0 text-blue" />
-          <span>
-            <span className="block text-lg font-extrabold">Salimos todos</span>
-            <span className="text-sm text-ink/55">Cooperar con el equipo.</span>
-          </span>
-          {current === 'share' && <Check className="ml-auto h-5 w-5 text-blue" />}
-        </motion.button>
+          <motion.button
+            whileTap={!timeUp ? { scale: 0.98 } : undefined}
+            disabled={timeUp}
+            onClick={() => void vote('steal')}
+            className={`flex w-full items-center gap-4 rounded-3xl border-2 p-5 text-left transition disabled:cursor-default ${
+              current === 'steal' ? 'border-pink bg-pink/10' : 'border-line bg-pale enabled:hover:border-white/30'
+            } ${timeUp && current !== 'steal' ? 'opacity-50' : ''}`}
+          >
+            <PixelIcon name="sword" className="h-10 w-10 shrink-0 text-pink" />
+            <span>
+              <span className="block text-lg font-extrabold">Salgo yo solo</span>
+              <span className="text-sm text-ink/55">Traicionar y cruzar la puerta.</span>
+            </span>
+            {current === 'steal' && <PixelIcon name="check" className="ml-auto h-4 w-4 text-pink" />}
+          </motion.button>
+        </div>
 
-        <motion.button
-          whileTap={!timeUp ? { scale: 0.98 } : undefined}
-          disabled={timeUp}
-          onClick={() => void vote('steal')}
-          className={`flex w-full items-center gap-4 rounded-3xl border-2 p-5 text-left transition disabled:cursor-default ${
-            current === 'steal' ? 'border-pink bg-pink/10' : 'border-line bg-white'
-          } ${timeUp && current !== 'steal' ? 'opacity-50' : ''}`}
-        >
-          <Swords className="h-9 w-9 shrink-0 text-pink" />
-          <span>
-            <span className="block text-lg font-extrabold">Salgo yo solo</span>
-            <span className="text-sm text-ink/55">Traicionar y cruzar la puerta.</span>
-          </span>
-          {current === 'steal' && <Check className="ml-auto h-5 w-5 text-pink" />}
-        </motion.button>
-      </div>
-
-      <div className="mt-auto space-y-2 pt-4 text-center">
-        {error && <p className="rounded-2xl bg-pink/10 px-4 py-3 text-sm font-medium text-pink">{error}</p>}
-        <p className="text-sm font-semibold">
-          {gs.votes_cast} de {alive} han votado
-        </p>
-        <p className="text-xs text-ink/40">
-          {timeUp ? 'Votación cerrada. Esperando al administrador…' : 'Puedes cambiar tu voto hasta que se acabe el tiempo. Si no votas, cuentas como «salimos todos».'}
-        </p>
+        <div className="mt-auto space-y-2 pt-6 text-center">
+          {error && <p className="rounded-2xl border border-pink/30 bg-pink/10 px-4 py-3 text-sm font-medium text-pink">{error}</p>}
+          <p className="text-sm font-semibold">
+            {gs.votes_cast} de {alive} han votado
+          </p>
+          <p className="text-xs text-ink/40">
+            {timeUp ? 'Votación cerrada. Esperando al profesor…' : 'Puedes cambiar tu voto hasta que se acabe el tiempo. Si no votas, cuentas como «salimos todos».'}
+          </p>
+        </div>
       </div>
     </div>
   )
@@ -613,46 +634,46 @@ function BetrayalRevealView({ ctx }: { ctx: Ctx }) {
   if (grp?.outcome === 'lone_winner') {
     head =
       grp.winner_player_id === session.playerId ? (
-        <Status icon={<Trophy className="h-14 w-14" />} label="Traición" title="¡Te largaste solo!" tone="lime">
-          <p className="font-semibold text-ink">Fuiste el único traidor: cruzaste la puerta y la sellaste tras de ti.</p>
+        <Status icon="trophy" label="Traición" title="¡Te largaste solo!" tone="lime">
+          <p className="font-semibold text-ink">Fuiste el único traidor: cruzaste la puerta y la sellaste tras de ti. Frío.</p>
         </Status>
       ) : (
-        <Status icon={<Swords className="h-14 w-14" />} label="Traición" title="Te traicionaron" tone="pink">
-          <p>{winnerName ?? 'Un compañero'} fue el único en traicionar: escapó solo y los dejó atrás.</p>
+        <Status icon="sword" label="Traición" title="Te traicionaron" tone="pink">
+          <p>{winnerName ?? 'Un compañero'} fue el único en traicionar: escapó solo y los dejó atrás. Ouch.</p>
         </Status>
       )
   } else if (grp?.outcome === 'wiped') {
     head = (
-      <Status icon={<Skull className="h-14 w-14" />} label="Traición" title="Nadie salió" tone="pink">
-        <p>Los traidores se anularon entre sí y el equipo se desmoronó.</p>
+      <Status icon="skull" label="Traición" title="Nadie salió" tone="pink">
+        <p>Los traidores se anularon entre sí y el equipo se desmoronó. La codicia no paga.</p>
       </Status>
     )
   } else if (meElim) {
     head = (
-      <Status icon={<Skull className="h-14 w-14" />} label="Traición" title="Caíste" tone="pink">
+      <Status icon="skull" label="Traición" title="Caíste" tone="pink">
         <p className="font-semibold text-pink">{me?.elimination_reason ?? 'Tu traición se anuló.'}</p>
       </Status>
     )
   } else {
     head = (
-      <Status icon={<Handshake className="h-14 w-14" />} label="Traición" title="La puerta se selló" tone="blue">
+      <Status icon="logo" label="Traición" title="La puerta se selló" tone="ink">
         <p>No hubo un único traidor. Solo queda la <b className="text-ink">prueba final</b>.</p>
       </Status>
     )
   }
 
   return (
-    <div className="flex flex-1 flex-col">
+    <Narrow>
       {head}
       {votes.length > 0 && (
         <div className="card mt-4 p-5">
           <Label>Los votos</Label>
           <ul className="mt-3 divide-y divide-line text-sm">
             {votes.map((v) => (
-              <li key={v.player_id} className="flex items-center justify-between py-2">
+              <li key={v.player_id} className="flex items-center justify-between py-2.5">
                 <span className="font-semibold">{v.player_name}</span>
-                <span className={`flex items-center gap-1.5 font-bold ${v.vote === 'steal' ? 'text-pink' : 'text-blue'}`}>
-                  {v.vote === 'steal' ? <Swords className="h-4 w-4" /> : <Handshake className="h-4 w-4" />}
+                <span className={`flex items-center gap-2 font-bold ${v.vote === 'steal' ? 'text-pink' : 'text-ink'}`}>
+                  {v.vote === 'steal' ? <PixelIcon name="sword" className="h-4 w-4" /> : <Logo className="h-4 w-4" />}
                   {v.vote === 'steal' ? 'Traicionó' : v.auto ? 'No votó' : 'Cooperó'}
                 </span>
               </li>
@@ -663,7 +684,7 @@ function BetrayalRevealView({ ctx }: { ctx: Ctx }) {
           )}
         </div>
       )}
-    </div>
+    </Narrow>
   )
 }
 
@@ -677,13 +698,13 @@ function TrialView({ ctx }: { ctx: Ctx }) {
   if (inTrial) return <QuestionView ctx={ctx} trial />
   if (me?.escaped) {
     return (
-      <Status icon={<Trophy className="h-14 w-14" />} label="Prueba final" title="Ya escapaste" tone="lime">
-        <p>Mientras tanto, otros equipos se juegan la última prueba.</p>
+      <Status icon="trophy" label="Prueba final" title="Ya escapaste" tone="lime">
+        <p>Mientras tanto, otros equipos se juegan la última prueba. Sírvete algo de beber.</p>
       </Status>
     )
   }
   return (
-    <Status icon={<Skull className="h-14 w-14" />} label="Prueba final" title="Miras desde fuera" tone="pink">
+    <Status icon="skull" label="Prueba final" title="Miras desde fuera" tone="pink">
       <p>{meElim ? 'Los equipos que sobrevivieron se juegan la prueba final.' : 'Tu equipo no llegó a la prueba final.'}</p>
     </Status>
   )
@@ -693,13 +714,13 @@ function TrialRevealView({ ctx }: { ctx: Ctx }) {
   const { grp, gs, game } = ctx
   const rv = game.reveal
   const extra = rv && (
-    <div className="rounded-3xl bg-pale p-4 text-sm leading-relaxed">
-      <b>Respuesta: {LETTERS[rv.correct_index]}.</b> {rv.explanation}
+    <div className="rounded-3xl border border-line bg-pale p-4 text-left text-sm leading-relaxed text-ink/80">
+      <b className="text-ink">Respuesta: {LETTERS[rv.correct_index]}.</b> {rv.explanation}
     </div>
   )
   if (grp?.outcome === 'escaped') {
     return (
-      <Status icon={<Trophy className="h-14 w-14" />} label="Prueba final" title="¡Escaparon!" tone="lime">
+      <Status icon="trophy" label="Prueba final" title="¡Escaparon!" tone="lime">
         <p className="font-semibold text-ink">{survivors(gs).length} sobrevivientes cruzan la última puerta.</p>
         {extra}
       </Status>
@@ -707,14 +728,14 @@ function TrialRevealView({ ctx }: { ctx: Ctx }) {
   }
   if (grp?.outcome === 'reset') {
     return (
-      <Status icon={<ShieldAlert className="h-14 w-14" />} label="Prueba final" title="Nivel cero" tone="pink">
-        <p>Fallaron la prueba final: pierden todas las llaves y vuelven al principio.</p>
+      <Status icon="shield" label="Prueba final" title="Nivel cero" tone="pink">
+        <p>Fallaron la prueba final: pierden todas las llaves y vuelven al principio. Así es la vida.</p>
         {extra}
       </Status>
     )
   }
   return (
-    <Status icon={<Zap className="h-14 w-14" />} label="Prueba final" title="Prueba terminada">
+    <Status icon="bolt" label="Prueba final" title="Prueba terminada">
       <p>Esperando el resultado final…</p>
       {extra}
     </Status>
@@ -733,45 +754,45 @@ function FinalView({ ctx }: { ctx: Ctx }) {
   let head: ReactNode
   if (outcome === 'escaped') {
     head = (
-      <Status icon={<Trophy className="h-16 w-16 animate-bounce" />} label="Misión cumplida" title="¡Escaparon!" tone="lime">
+      <Status icon="trophy" label="Misión cumplida" title="¡Escaparon!" tone="lime">
         <p>
-          {me?.escaped ? 'Cruzaste la última puerta junto a tu equipo.' : 'Tu equipo escapó, pero tú caíste por el camino.'}
+          {me?.escaped ? 'Cruzaste la última puerta junto a tu equipo. Hoy sí hubo amistad.' : 'Tu equipo escapó, pero tú caíste por el camino. Un héroe caído.'}
         </p>
       </Status>
     )
   } else if (outcome === 'lone_winner') {
     head =
       grp?.winner_player_id === session.playerId ? (
-        <Status icon={<Trophy className="h-16 w-16 animate-bounce" />} label="Misión cumplida" title="Escapaste solo" tone="lime">
-          <p>Traicionaste a tu equipo y cruzaste la puerta. Tú ganaste.</p>
+        <Status icon="trophy" label="Misión cumplida" title="Escapaste solo" tone="lime">
+          <p>Traicionaste a tu equipo y cruzaste la puerta. Tú ganaste. Ellos lo recordarán.</p>
         </Status>
       ) : (
-        <Status icon={<Swords className="h-16 w-16" />} label="Misión fallida" title="Te traicionaron" tone="pink">
+        <Status icon="sword" label="Misión fallida" title="Te traicionaron" tone="pink">
           <p>Un compañero escapó solo. Nadie más salió.</p>
         </Status>
       )
   } else if (outcome === 'reset') {
     head = (
-      <Status icon={<ShieldAlert className="h-16 w-16" />} label="Misión fallida" title="Nivel cero" tone="pink">
+      <Status icon="shield" label="Misión fallida" title="Nivel cero" tone="pink">
         <p>Fallaron la prueba final y lo perdieron todo.</p>
       </Status>
     )
   } else if (outcome === 'wiped') {
     head = (
-      <Status icon={<Skull className="h-16 w-16" />} label="Misión fallida" title="Equipo aniquilado" tone="pink">
+      <Status icon="skull" label="Misión fallida" title="Equipo aniquilado" tone="pink">
         <p>Nadie quedó con vida.</p>
       </Status>
     )
   } else {
     head = (
-      <Status icon={<ShieldAlert className="h-16 w-16" />} label="Partida terminada" title="Fin del juego">
+      <Status icon="door" label="Partida terminada" title="Fin del juego">
         <p>La partida terminó antes de completar todas las fases.</p>
       </Status>
     )
   }
 
   return (
-    <>
+    <Narrow>
       {head}
       {grp && (
         <div className="card mb-4 p-5 text-center">
@@ -797,6 +818,6 @@ function FinalView({ ctx }: { ctx: Ctx }) {
       >
         Volver al inicio
       </Button>
-    </>
+    </Narrow>
   )
 }

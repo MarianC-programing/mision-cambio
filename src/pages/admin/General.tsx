@@ -26,8 +26,8 @@ export default function General({ admin }: { admin: Admin }) {
     return (
       <div className="card mx-auto mt-10 max-w-xl p-10 text-center">
         <Label>Sin partida activa</Label>
-        <h2 className="display mt-3 text-5xl">
-          Crea la <span className="serif-i text-blue">partida.</span>
+        <h2 className="pixel t-h1 mt-5">
+          Crea la <span className="text-ink/45">partida.</span>
         </h2>
         <p className="mt-3 text-ink/60">Se generará un código y un QR para que los estudiantes entren desde el celular.</p>
         <Button className="mt-6" size="lg" onClick={() => void admin.createGame()} disabled={admin.busy}>
@@ -39,7 +39,7 @@ export default function General({ admin }: { admin: Admin }) {
 
   const { game, players, group_answers: groupAnswers, groups, questions, finale_votes: votes } = snap
   const s = game.status
-  const joinUrl = `${window.location.origin}/?c=${game.code}`
+  const joinUrl = `${window.location.origin}/unirse?c=${game.code}`
   const q = questions.find((x) => x.pos === game.q_index)
   const connected = players.filter((p) => admin.online.has(p.id)).length
 
@@ -81,15 +81,15 @@ export default function General({ admin }: { admin: Admin }) {
             <Label>Estado</Label>
             <p className="display mt-3 text-2xl leading-tight">{STATUS_LABEL[s]}</p>
           </div>
-          <div className="card flex items-center gap-4 bg-lime p-5">
+          <div className="card flex items-center gap-4 !border-lime !bg-lime p-5 text-black">
             <Users className="h-8 w-8" />
             <div>
-              <Label className="!text-ink/70">Participantes</Label>
+              <Label className="!text-black/70">Participantes</Label>
               <p className="display text-4xl">{players.length}</p>
             </div>
           </div>
           <div className="card flex items-center gap-4 p-5">
-            <Wifi className="h-8 w-8 text-blue" />
+            <Wifi className="h-8 w-8 text-lime" />
             <div>
               <Label>Conectados</Label>
               <p className="display text-4xl">{connected}</p>
@@ -132,10 +132,10 @@ export default function General({ admin }: { admin: Admin }) {
                   <div
                     key={i}
                     className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold ${
-                      ok ? (revealed ? 'bg-lime' : 'bg-lime/40') : 'bg-pale'
+                      ok ? (revealed ? 'bg-lime text-black' : 'bg-lime/25') : 'bg-pale'
                     }`}
                   >
-                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-ink font-mono text-xs text-white">{LETTERS[i]}</span>
+                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-white font-mono text-xs font-bold text-black">{LETTERS[i]}</span>
                     <span className="flex-1">{o}</span>
                     {game.reveal && revealed && <span className="label text-ink/60">{game.reveal.counts[i] ?? 0}</span>}
                   </div>
@@ -166,7 +166,7 @@ function Progress({ label, value, total, note }: { label: string; value: number;
         </Label>
       </div>
       <div className="h-2.5 overflow-hidden rounded-full bg-pale">
-        <div className="h-full rounded-full bg-blue transition-all" style={{ width: `${total ? Math.min(100, (value / total) * 100) : 0}%` }} />
+        <div className="h-full rounded-full bg-lime transition-all" style={{ width: `${total ? Math.min(100, (value / total) * 100) : 0}%` }} />
       </div>
       <p className="mt-2 text-xs text-ink/45">{note}</p>
     </div>

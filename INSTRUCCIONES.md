@@ -157,10 +157,9 @@ pnpm typecheck  # comprobación de TypeScript
 
 ## 7. Diseño
 
-- Fondo off-white `#f7f6f3`, texto near-black `#111111`.
-- Tarjetas blancas con bordes suaves y radios grandes.
-- Acentos: azul `#3158f5`, púrpura `#8337ed`, lima `#c8ff18`, naranja `#ff6b16`,
-  rosa `#f72585`, amarillo `#ffd51a`, cian `#16c6e8`.
-- Tipografía: Geist (sans) + Geist Mono + Instrument Serif (cursiva para énfasis).
-- Participantes optimizado para móvil; dashboard para laptop.
-- Respeta `prefers-reduced-motion`.
+- Tema oscuro `#0a0a0a` con líneas de escaneo tenues; texto blanco, gris `#9aa0a6`, acento lima `#d7f36a` solo para estados activos.
+- Tipografía: Press Start 2P (pixel, títulos/botones/etiquetas) + Geist (cuerpo).
+- Rutas: `/` landing (hero con `public/ciudad_flotante_loop.mp4`), `/unirse` entrada de jugadores, `/play` partida, `/admin` panel.
+- Todo es responsivo: móvil en una columna; en tablet/escritorio la vista del jugador se expande a dos columnas.
+- Logo: `public/mision-cambio.svg`. Los derivados (silueta blanca, favicon) y el arte pixel-art se generan con `python3 scripts/make-art.py` (requiere Pillow).
+- Respeta `prefers-reduced-motion` (el hero usa el póster en lugar del video).

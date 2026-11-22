@@ -22,7 +22,7 @@ export default function Answers({ admin }: { admin: Admin }) {
   }, [snap, qs, team, result])
 
   if (!snap) return <p className="mt-10 text-center text-ink/50">Crea una partida para ver respuestas.</p>
-  const select = 'h-10 rounded-full bg-pale px-4 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue'
+  const select = 'h-10 rounded-full bg-pale px-4 text-sm font-semibold outline-none focus:ring-2 focus:ring-lime'
 
   return (
     <section className="card overflow-hidden">

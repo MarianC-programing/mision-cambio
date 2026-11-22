@@ -17,7 +17,8 @@ export default function Participants({ admin }: { admin: Admin }) {
         <Label>Participantes ({players.length})</Label>
         <Label>{players.filter((p) => admin.online.has(p.id)).length} conectados</Label>
       </div>
-      <table className="w-full text-left text-sm">
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-[640px] text-left text-sm">
         <thead className="label text-ink/50">
           <tr>
             <th className="px-6 py-3">Nombre</th>
@@ -45,11 +46,11 @@ export default function Participants({ admin }: { admin: Admin }) {
                   )}
                 </td>
                 <td className="px-3 py-3 text-xs font-bold">
-                  {!t ? '—' : t.escaped ? 'Escapó' : t.eliminated ? <span className="text-pink">Eliminado</span> : <span className="text-blue">Vivo</span>}
+                  {!t ? '—' : t.escaped ? 'Escapó' : t.eliminated ? <span className="text-pink">Eliminado</span> : <span className="text-lime">Vivo</span>}
                 </td>
                 <td className="px-3 py-3">
                   <Badge tone={on ? 'lime' : 'pale'}>
-                    <span className={`h-2 w-2 rounded-full ${on ? 'bg-ink' : 'bg-ink/30'}`} />
+                    <span className={`h-2 w-2 rounded-full ${on ? 'bg-black' : 'bg-white/30'}`} />
                     {on ? 'Conectado' : 'Desconectado'}
                   </Badge>
                 </td>
@@ -74,6 +75,7 @@ export default function Participants({ admin }: { admin: Admin }) {
           )}
         </tbody>
       </table>
+      </div>
     </section>
   )
 }

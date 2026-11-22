@@ -99,11 +99,11 @@ export default function Groups({ admin }: { admin: Admin }) {
                             {winner === m.player_id && <span className="label ml-2 text-ink/50">traidor</span>}
                           </td>
                           <td className="px-4 py-3 text-center text-xs font-bold">
-                            {m.escaped ? <span className="text-ink">Escapó</span> : m.eliminated ? <span className="text-pink">Eliminado</span> : <span className="text-blue">Vivo</span>}
+                            {m.escaped ? <span className="text-ink">Escapó</span> : m.eliminated ? <span className="text-pink">Eliminado</span> : <span className="text-lime">Vivo</span>}
                           </td>
                           <td className="px-4 py-3 text-center text-xs">
                             {!v ? '—' : !votesVisible ? 'Votó' : (
-                              <span className={`inline-flex items-center gap-1 font-bold ${v.vote === 'steal' ? 'text-pink' : 'text-blue'}`}>
+                              <span className={`inline-flex items-center gap-1 font-bold ${v.vote === 'steal' ? 'text-pink' : 'text-lime'}`}>
                                 {v.vote === 'steal' ? <Swords className="h-3.5 w-3.5" /> : <Handshake className="h-3.5 w-3.5" />}
                                 {v.vote === 'steal' ? 'Traicionó' : v.auto ? 'No votó' : 'Cooperó'}
                               </span>

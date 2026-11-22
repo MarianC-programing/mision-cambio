@@ -144,7 +144,7 @@ export default function Control({ admin }: { admin: Admin }) {
             <Label>Participantes ({players.length})</Label>
             <div className="mt-3 flex flex-wrap gap-2">
               {players.map((p) => (
-                <span key={p.id} className="rounded-full border border-line bg-white px-3 py-1.5 text-sm font-semibold">
+                <span key={p.id} className="rounded-full border border-line bg-canvas px-3 py-1.5 text-sm font-semibold">
                   {p.name}
                 </span>
               ))}

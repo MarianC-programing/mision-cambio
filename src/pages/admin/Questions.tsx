@@ -5,14 +5,14 @@ import type { AdminQuestion } from '../../lib/types'
 import type { Admin } from './useAdmin'
 
 const LETTERS = ['A', 'B', 'C', 'D']
-const field = 'w-full rounded-2xl bg-pale px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-blue'
+const field = 'w-full rounded-2xl bg-pale px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-lime'
 
 export default function Questions({ admin }: { admin: Admin }) {
   const pending = admin.questions.some((q) => JSON.stringify(q).includes('[EDITAR]'))
   return (
     <div className="space-y-5">
       {pending && (
-        <div className="flex items-start gap-3 rounded-3xl bg-yellow/60 p-5 text-sm font-semibold">
+        <div className="flex items-start gap-3 rounded-3xl border border-yellow/30 bg-yellow/10 p-5 text-yellow text-sm font-semibold">
           <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0" />
           Aún hay preguntas con texto de ejemplo «[EDITAR]». Escribe las que se explicaron en la exposición antes de iniciar.
           Las preguntas se leen al crear la partida; no puedes editar la que está en juego.
@@ -68,7 +68,7 @@ function QuestionCard({ q, admin }: { q: AdminQuestion; admin: Admin }) {
             />
             <span
               className={`grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-xl font-mono text-sm font-bold ${
-                d.correct_index === i ? 'bg-lime text-ink' : 'bg-white text-ink/40'
+                d.correct_index === i ? 'bg-lime text-black' : 'bg-canvas text-ink/40'
               }`}
               title="Marcar como correcta"
             >
