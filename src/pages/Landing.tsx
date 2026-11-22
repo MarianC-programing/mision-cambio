@@ -69,6 +69,58 @@ function Rotator() {
   )
 }
 
+/**
+ * Video de fondo. En iOS/Android el atributo `muted` que React pinta no siempre
+ * llega al DOM a tiempo y el navegador muestra el botón de play: se fuerza por
+ * código y se reintenta con el primer toque. Si el sistema lo bloquea del todo
+ * (ahorro de batería), se queda el póster en lugar de un botón de play.
+ */
+function HeroVideo() {
+  const ref = useRef<HTMLVideoElement>(null)
+  const [blocked, setBlocked] = useState(false)
+  useEffect(() => {
+    const v = ref.current
+    if (!v) return
+    v.muted = true
+    v.defaultMuted = true
+    v.setAttribute('muted', '')
+    v.setAttribute('playsinline', '')
+    const play = () => v.play().then(() => setBlocked(false)).catch(() => setBlocked(true))
+    void play()
+    const retry = () => void play()
+    v.addEventListener('loadeddata', retry)
+    document.addEventListener('visibilitychange', retry)
+    window.addEventListener('touchstart', retry, { once: true, passive: true })
+    window.addEventListener('pointerdown', retry, { once: true })
+    return () => {
+      v.removeEventListener('loadeddata', retry)
+      document.removeEventListener('visibilitychange', retry)
+      window.removeEventListener('touchstart', retry)
+      window.removeEventListener('pointerdown', retry)
+    }
+  }, [])
+  return (
+    <>
+      <video
+        ref={ref}
+        className="hero-video absolute inset-0 -z-20 h-full w-full object-cover"
+        src="/ciudad_flotante_loop.mp4"
+        poster="/art/hero-poster.jpg"
+        autoPlay
+        muted
+        loop
+        playsInline
+        disablePictureInPicture
+        controls={false}
+        preload="auto"
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+      {blocked && <img src="/art/hero-poster.jpg" alt="" className="absolute inset-0 -z-[19] h-full w-full object-cover" />}
+    </>
+  )
+}
+
 function Hero() {
   const still = useReducedMotion()
   return (
@@ -76,17 +128,7 @@ function Hero() {
       {still ? (
         <img src="/art/hero-poster.jpg" alt="" className="absolute inset-0 -z-20 h-full w-full object-cover" />
       ) : (
-        <video
-          className="absolute inset-0 -z-20 h-full w-full object-cover"
-          src="/ciudad_flotante_loop.mp4"
-          poster="/art/hero-poster.jpg"
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="auto"
-          aria-hidden="true"
-        />
+        <HeroVideo />
       )}
       <div className="absolute inset-0 -z-10 bg-gradient-to-b from-black/65 via-black/30 to-black/90" />
 

@@ -100,3 +100,10 @@ option { background: #17171a; color: #fff; }
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* Nunca mostrar el botón de play nativo sobre el video de fondo (iOS/Android). */
+.hero-video { pointer-events: none; }
+.hero-video::-webkit-media-controls,
+.hero-video::-webkit-media-controls-start-playback-button,
+.hero-video::-webkit-media-controls-overlay-play-button,
+.hero-video::-webkit-media-controls-panel { display: none !important; -webkit-appearance: none; opacity: 0; }
