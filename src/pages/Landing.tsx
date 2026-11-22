@@ -148,13 +148,14 @@ function Hero() {
       </div>
 
       <div className="flex flex-1 flex-col items-center justify-center px-4 pb-24 pt-8 text-center">
-        <div className="wordmark-wrap">
-          <h1 className="t-wordmark">
-            Misión:
-            <br className="sm:hidden" /> Cambio
-          </h1>
-        </div>
-        <p className="mt-6 max-w-xl text-xl leading-snug text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.6)] sm:mt-8 sm:text-3xl">
+        <h1 className="pixel t-wordmark text-white" aria-label="Misión: Cambio">
+          <span aria-hidden="true">
+            MISI<span className="accent-o">O</span>N:
+            <br />
+            CAMBIO
+          </span>
+        </h1>
+        <p className="mt-8 max-w-xl text-base leading-relaxed text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.9)] sm:text-lg">
           Abre 10 puertas. Confía en tu equipo.
         </p>
         <Link to="/unirse" className={btn('white', 'lg', 'mt-10')}>
