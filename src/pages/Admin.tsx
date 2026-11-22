@@ -56,7 +56,7 @@ function Gate({ onOk }: { onOk: (pin: string) => void }) {
           <PixelIcon name="lock" className="h-6 w-6" />
         </div>
         <h1 className="pixel t-h2">
-          Panel <span className="text-ink/45">del profesor</span>
+          Panel <span className="text-ink/60">del profesor</span>
         </h1>
         <p className="text-sm text-ink/55">Solo quien tiene el PIN controla las puertas. (Y las vidas de sus compañeros.)</p>
         <label className="block">

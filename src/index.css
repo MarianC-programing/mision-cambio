@@ -107,3 +107,23 @@ option { background: #17171a; color: #fff; }
 .hero-video::-webkit-media-controls-start-playback-button,
 .hero-video::-webkit-media-controls-overlay-play-button,
 .hero-video::-webkit-media-controls-panel { display: none !important; -webkit-appearance: none; opacity: 0; }
+
+/* Título del hero: wordmark gigante en pixel, 2 líneas, centrado. */
+.t-wordmark {
+  font-size: clamp(2.3rem, 11.4vw, 7.5rem);
+  line-height: 1.12;
+  letter-spacing: 0.07em;
+  text-shadow: 0 0.06em 0 rgb(0 0 0 / 0.7), 0 0 0.6em rgb(0 0 0 / 0.35);
+}
+/* Press Start 2P no trae la Ó mayúscula: se dibuja el acento con píxeles. */
+.accent-o { position: relative; display: inline-block; }
+.accent-o::after {
+  content: "";
+  position: absolute;
+  left: 0.5em;
+  top: -0.06em;
+  width: 0.125em;
+  height: 0.125em;
+  background: currentColor;
+  box-shadow: 0.125em -0.125em 0 currentColor;
+}

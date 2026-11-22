@@ -161,7 +161,7 @@ export default function Control({ admin }: { admin: Admin }) {
               <TimerRing ms={ms} totalMs={phaseTotalMs(game)} size={150} paused={s === 'paused'} />
             </div>
           ) : (
-            <p className="display mt-5 text-6xl text-ink/20">{s === 'finished' ? '🏁' : '—'}</p>
+            <p className="display mt-5 text-6xl text-ink/60">{s === 'finished' ? '🏁' : '—'}</p>
           )}
         </div>
 
@@ -179,10 +179,10 @@ export default function Control({ admin }: { admin: Admin }) {
               {g.outcome && <Badge tone={g.outcome === 'escaped' || g.outcome === 'lone_winner' ? 'lime' : g.outcome === 'trap' ? 'blue' : 'pink'}>{OUTCOME_LABEL[g.outcome]}</Badge>}
             </div>
           ))}
-          {groups.length === 0 && <p className="text-sm text-ink/45">Aún no hay equipos.</p>}
+          {groups.length === 0 && <p className="text-sm text-ink/60">Aún no hay equipos.</p>}
         </div>
 
-        <p className="mt-5 text-xs text-ink/45">
+        <p className="mt-5 text-xs text-ink/60">
           Cada puerta dura {game.duration_ms / 1000} s. Al revelar: acierto = llave, fallo = cae un miembro al azar.
         </p>
       </aside>

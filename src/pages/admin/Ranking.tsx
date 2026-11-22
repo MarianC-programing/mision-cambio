@@ -25,7 +25,7 @@ export default function Ranking({ admin }: { admin: Admin }) {
       <section className="card p-8">
         <Label>{finished ? 'Ganadores' : 'Ganadores hasta ahora'}</Label>
         {winners.length === 0 ? (
-          <p className="display mt-6 text-4xl text-ink/25">{finished ? 'Nadie escapó.' : 'Aún nadie ha escapado.'}</p>
+          <p className="display mt-6 text-4xl text-ink/60">{finished ? 'Nadie escapó.' : 'Aún nadie ha escapado.'}</p>
         ) : (
           <div className="mt-6 space-y-4">
             {winners.map((g) => {
@@ -48,7 +48,7 @@ export default function Ranking({ admin }: { admin: Admin }) {
             })}
           </div>
         )}
-        <p className="mt-6 text-xs text-ink/45">
+        <p className="mt-6 text-xs text-ink/60">
           Escapan los equipos que superan la prueba final y el único traidor de un equipo, si hubo uno.
         </p>
       </section>
@@ -60,7 +60,7 @@ export default function Ranking({ admin }: { admin: Admin }) {
         <ol className="divide-y divide-line">
           {sorted.map((g, i) => (
             <li key={g.id} className="flex items-center gap-3 px-6 py-4">
-              <span className="display w-7 text-xl text-ink/40">{i + 1}</span>
+              <span className="display w-7 text-xl text-ink/60">{i + 1}</span>
               <span className="h-4 w-4 shrink-0 rounded-full" style={{ backgroundColor: teamHex(g.color) }} />
               <div className="min-w-0 flex-1">
                 <p className="font-semibold">{teamName(g.color)}</p>
@@ -69,7 +69,7 @@ export default function Ranking({ admin }: { admin: Admin }) {
                 </p>
               </div>
               <span className="flex items-center gap-1 text-sm font-bold tabular-nums">
-                <Key className="h-4 w-4 text-ink/40" /> {g.key_count}
+                <Key className="h-4 w-4 text-ink/60" /> {g.key_count}
               </span>
               <Badge tone={g.outcome === 'escaped' || g.outcome === 'lone_winner' ? 'lime' : g.outcome === 'trap' ? 'blue' : g.outcome ? 'pink' : 'pale'}>
                 {g.outcome ? OUTCOME_LABEL[g.outcome] : 'En juego'}

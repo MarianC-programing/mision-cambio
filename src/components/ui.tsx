@@ -102,7 +102,7 @@ export function TimerRing({ ms, totalMs, size = 96, paused = false }: { ms: numb
 export function Headline({ bold, accent, className = '' }: { bold: string; accent: string; className?: string }) {
   return (
     <h1 className={`pixel ${className}`}>
-      {bold} <span className="text-ink/45">{accent}</span>
+      {bold} <span className="text-ink/60">{accent}</span>
     </h1>
   )
 }

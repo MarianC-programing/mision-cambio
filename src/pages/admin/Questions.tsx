@@ -68,7 +68,7 @@ function QuestionCard({ q, admin }: { q: AdminQuestion; admin: Admin }) {
             />
             <span
               className={`grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-xl font-mono text-sm font-bold ${
-                d.correct_index === i ? 'bg-lime text-black' : 'bg-canvas text-ink/40'
+                d.correct_index === i ? 'bg-lime text-black' : 'bg-canvas text-ink/60'
               }`}
               title="Marcar como correcta"
             >
@@ -83,7 +83,7 @@ function QuestionCard({ q, admin }: { q: AdminQuestion; admin: Admin }) {
           </label>
         ))}
       </div>
-      <p className="mt-2 text-xs text-ink/45">Pulsa la letra para marcar la respuesta correcta (verde).</p>
+      <p className="mt-2 text-xs text-ink/60">Pulsa la letra para marcar la respuesta correcta (verde).</p>
       <label className="mt-4 block">
         <Label>Explicación (se muestra al revelar)</Label>
         <textarea className={`${field} mt-2`} rows={2} value={d.explanation} onChange={(e) => set({ explanation: e.target.value })} />

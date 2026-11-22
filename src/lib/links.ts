@@ -17,4 +17,5 @@ export function publicOrigin(): string {
   return onVercelDeployment ? PRODUCTION_URL : origin
 }
 
-export const joinLink = (code: string) => `${publicOrigin()}/unirse?c=${encodeURIComponent(code)}`
+/** Enlace general para unirse (sin código en la URL): lo puede abrir cualquiera. */
+export const joinLink = () => `${publicOrigin()}/unirse`

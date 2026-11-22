@@ -280,7 +280,7 @@ function LobbyView({ ctx }: { ctx: Ctx }) {
         </p>
         <p className="mt-2">Y al final espera una última puerta que pondrá a prueba su confianza… y su amistad.</p>
       </div>
-      <p className="mt-auto pt-8 text-xs text-ink/40">Respira. Mira a tu equipo. Decide a quién vigilar. La primera puerta está por abrirse…</p>
+      <p className="mt-auto pt-8 text-xs text-ink/60">Respira. Mira a tu equipo. Decide a quién vigilar. La primera puerta está por abrirse…</p>
     </Narrow>
   )
 }
@@ -391,7 +391,7 @@ function QuestionView({ ctx, trial = false }: { ctx: Ctx; trial?: boolean }) {
               Se acabó el tiempo. Su equipo no respondió. La puerta tiene hambre.
             </p>
           ) : (
-            <p className="text-center text-xs text-ink/45">El primero que responda decide por todo el equipo. Sí, incluso si se equivoca.</p>
+            <p className="text-center text-xs text-ink/60">El primero que responda decide por todo el equipo. Sí, incluso si se equivoca.</p>
           )}
           {!trial && <KeyBar ctx={ctx} />}
         </div>
@@ -495,12 +495,12 @@ function RevealView({ ctx }: { ctx: Ctx }) {
             {dramatize(e.player_name, e.reason)}
           </motion.p>
         ))}
-        {meElim && !iFell && me && <p className="text-center text-xs text-ink/45">Sigues fuera de juego.</p>}
+        {meElim && !iFell && me && <p className="text-center text-xs text-ink/60">Sigues fuera de juego.</p>}
       </div>
 
       <div className="mt-auto space-y-3 pt-6">
         <KeyBar ctx={ctx} />
-        <p className="text-center text-xs text-ink/40">Siguen en pie: {survivors(gs).length} de {gs.members.length}</p>
+        <p className="text-center text-xs text-ink/60">Siguen en pie: {survivors(gs).length} de {gs.members.length}</p>
       </div>
     </Narrow>
   )
@@ -567,7 +567,7 @@ function BetrayalView({ ctx }: { ctx: Ctx }) {
         </div>
 
         <h2 className="pixel mt-5 text-[clamp(1.1rem,5.4vw,2.4rem)] leading-snug">
-          Solo una puerta. <span className="text-ink/45">¿Confías en ellos?</span>
+          Solo una puerta. <span className="text-ink/60">¿Confías en ellos?</span>
         </h2>
         <p className="mt-4 text-sm leading-relaxed text-ink/60 md:text-base">
           Cada uno vota <b className="text-ink">en secreto</b>. Lo que pase depende de cuántos de ustedes traicionen. Mira a tus
@@ -615,7 +615,7 @@ function BetrayalView({ ctx }: { ctx: Ctx }) {
           <p className="text-sm font-semibold">
             {gs.votes_cast} de {alive} han votado
           </p>
-          <p className="text-xs text-ink/40">
+          <p className="text-xs text-ink/60">
             {timeUp ? 'Votación cerrada. Esperando al profesor…' : 'Puedes cambiar tu voto hasta que se acabe el tiempo. Si no votas, cuentas como «salimos todos».'}
           </p>
         </div>
@@ -680,7 +680,7 @@ function BetrayalRevealView({ ctx }: { ctx: Ctx }) {
             ))}
           </ul>
           {fallen.length > 0 && (
-            <p className="mt-3 text-xs text-ink/45">Cayeron: {fallen.map((f) => f.player_name).join(', ')}.</p>
+            <p className="mt-3 text-xs text-ink/60">Cayeron: {fallen.map((f) => f.player_name).join(', ')}.</p>
           )}
         </div>
       )}

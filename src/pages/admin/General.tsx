@@ -28,7 +28,7 @@ export default function General({ admin }: { admin: Admin }) {
       <div className="card mx-auto mt-10 max-w-xl p-10 text-center">
         <Label>Sin partida activa</Label>
         <h2 className="pixel t-h1 mt-5">
-          Crea la <span className="text-ink/45">partida.</span>
+          Crea la <span className="text-ink/60">partida.</span>
         </h2>
         <p className="mt-3 text-ink/60">Se generará un código y un QR para que los estudiantes entren desde el celular.</p>
         <Button className="mt-6" size="lg" onClick={() => void admin.createGame()} disabled={admin.busy}>
@@ -40,7 +40,7 @@ export default function General({ admin }: { admin: Admin }) {
 
   const { game, players, group_answers: groupAnswers, groups, questions, finale_votes: votes } = snap
   const s = game.status
-  const joinUrl = joinLink(game.code)
+  const joinUrl = joinLink()
   const q = questions.find((x) => x.pos === game.q_index)
   const connected = players.filter((p) => admin.online.has(p.id)).length
 
@@ -114,7 +114,7 @@ export default function General({ admin }: { admin: Admin }) {
               ) : s === 'betrayal_reveal' ? (
                 <p className="display mt-3 text-3xl leading-[1.05]">Mira el resultado de cada equipo en «Grupos».</p>
               ) : (
-                <p className="display mt-3 text-3xl text-ink/30">{s === 'finished' ? 'Revisa el resultado en «Ranking»' : 'Aún no ha comenzado'}</p>
+                <p className="display mt-3 text-3xl text-ink/60">{s === 'finished' ? 'Revisa el resultado en «Ranking»' : 'Aún no ha comenzado'}</p>
               )}
             </div>
             {(answering || s === 'betrayal') && (
@@ -169,7 +169,7 @@ function Progress({ label, value, total, note }: { label: string; value: number;
       <div className="h-2.5 overflow-hidden rounded-full bg-pale">
         <div className="h-full rounded-full bg-lime transition-all" style={{ width: `${total ? Math.min(100, (value / total) * 100) : 0}%` }} />
       </div>
-      <p className="mt-2 text-xs text-ink/45">{note}</p>
+      <p className="mt-2 text-xs text-ink/60">{note}</p>
     </div>
   )
 }

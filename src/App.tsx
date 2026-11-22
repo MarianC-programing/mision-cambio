@@ -13,7 +13,7 @@ function SetupNotice() {
       <div className="card p-6 sm:p-8">
         <p className="label text-ink/55">Falta configuración</p>
         <h1 className="pixel t-h2 mt-4">
-          Conecta <span className="text-ink/45">Supabase.</span>
+          Conecta <span className="text-ink/60">Supabase.</span>
         </h1>
         <ol className="mt-6 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-ink/70">
           <li>Copia <code className="rounded bg-pale px-1.5">.env.example</code> a <code className="rounded bg-pale px-1.5">.env</code>.</li>

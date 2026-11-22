@@ -109,7 +109,7 @@ export default function Groups({ admin }: { admin: Admin }) {
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-right text-xs italic text-ink/40">{m.elimination_reason ?? '—'}</td>
+                          <td className="px-4 py-3 text-right text-xs italic text-ink/60">{m.elimination_reason ?? '—'}</td>
                         </tr>
                       )
                     })}

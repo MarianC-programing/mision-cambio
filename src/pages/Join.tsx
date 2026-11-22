@@ -50,7 +50,7 @@ export default function Join() {
           <h1 className="pixel mt-4 text-[clamp(1.25rem,6vw,1.9rem)] md:text-[clamp(1.25rem,4.4vw,3.25rem)]">
             Escape room
             <br />
-            <span className="text-ink/45">Misión: Cambio</span>
+            <span className="text-ink/60">Misión: Cambio</span>
           </h1>
           <p className="mt-6 max-w-sm text-[15px] leading-relaxed text-ink/60 md:text-base">
             Responde en equipo, consigue las llaves y cuidado con quién confías en la última puerta.
@@ -95,7 +95,7 @@ export default function Join() {
               </>
             )}
           </Button>
-          <p className="text-center text-xs text-ink/40">Sin registro. Solo tu nombre. Tu equipo se asigna al azar (sí, puede tocarte quien no te cae bien).</p>
+          <p className="text-center text-xs text-ink/60">Sin registro. Solo tu nombre. Tu equipo se asigna al azar (sí, puede tocarte quien no te cae bien).</p>
         </form>
       </motion.div>
     </main>

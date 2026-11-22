@@ -42,7 +42,7 @@ export default function Participants({ admin }: { admin: Admin }) {
                       {teamName(t.color)}
                     </span>
                   ) : (
-                    <span className="text-ink/40">Sin equipo</span>
+                    <span className="text-ink/60">Sin equipo</span>
                   )}
                 </td>
                 <td className="px-3 py-3 text-xs font-bold">
@@ -58,7 +58,7 @@ export default function Participants({ admin }: { admin: Admin }) {
                   <button
                     title="Expulsar"
                     onClick={() => window.confirm(`¿Expulsar a ${p.name}?`) && void admin.removePlayer(p.id)}
-                    className="rounded-full p-2 text-ink/40 transition hover:bg-pink/10 hover:text-pink"
+                    className="rounded-full p-2 text-ink/60 transition hover:bg-pink/10 hover:text-pink"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>

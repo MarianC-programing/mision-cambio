@@ -124,7 +124,7 @@ function HeroVideo() {
 function Hero() {
   const still = useReducedMotion()
   return (
-    <header className="relative isolate flex min-h-svh flex-col overflow-hidden bg-[#1b6fd1]">
+    <header className="relative isolate flex min-h-svh flex-col overflow-hidden bg-[#0a0a0a]">
       {still ? (
         <img src="/art/hero-poster.jpg" alt="" className="absolute inset-0 -z-20 h-full w-full object-cover" />
       ) : (
@@ -139,23 +139,24 @@ function Hero() {
         </Link>
         <div className="ml-4 hidden items-center gap-3 sm:flex">
           <span className="h-5 w-px bg-white/25" />
-          <span className="pixel text-[11px] text-white/80">Escape room</span>
+          <span className="pixel text-[11px] text-white">Escape room</span>
           <Badge tone="pale">En vivo</Badge>
         </div>
-        <Link to="/admin" className={btn('quiet', 'sm', 'ml-auto bg-black/40')}>
+        <Link to="/admin" className={btn('quiet', 'sm', 'ml-auto !bg-black/70 !text-white')}>
           <PixelIcon name="lock" className="h-3.5 w-3.5" /> Profesor
         </Link>
       </div>
 
       <div className="flex flex-1 flex-col items-center justify-center px-4 pb-24 pt-8 text-center">
-        <p className="label mb-6 text-white/90 [text-shadow:0_1px_6px_rgba(0,0,0,0.9)]">Escape room en equipo · Mantenimiento de software</p>
-        <h1 className="pixel t-hero pixel-shadow text-white">
-          Misión:
-          <br />
-          Cambio
+        <h1 className="pixel t-wordmark text-white" aria-label="Misión: Cambio">
+          <span aria-hidden="true">
+            MISI<span className="accent-o">O</span>N:
+            <br />
+            CAMBIO
+          </span>
         </h1>
-        <p className="mt-7 max-w-xl text-base leading-relaxed text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.9)] sm:text-lg">
-          Abre 10 puertas con tu equipo, gana llaves y decide si confías en ellos cuando solo queda una.
+        <p className="mt-8 max-w-xl text-base leading-relaxed text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.9)] sm:text-lg">
+          Abre 10 puertas. Confía en tu equipo.
         </p>
         <Link to="/unirse" className={btn('white', 'lg', 'mt-10')}>
           ¡Abrir la primera puerta! <PixelIcon name="arrow" flip className="h-4 w-4" />
@@ -431,13 +432,13 @@ function PlayerSlide() {
           <Opt letter="C">Adaptativo</Opt>
           <Opt letter="D">Preventivo</Opt>
         </div>
-        <p className="mt-4 text-center text-[10px] text-ink/45">El primero que responda decide por todo el equipo.</p>
+        <p className="mt-4 text-center text-[10px] text-ink/60">El primero que responda decide por todo el equipo.</p>
       </Phone>
 
       <Phone className="mt-12 hidden rotate-2 sm:block">
         <p className="label text-[8px]">La última puerta</p>
         <p className="pixel mt-3 text-[13px] leading-snug">
-          Solo una puerta. <span className="text-ink/45">¿Confías en ellos?</span>
+          Solo una puerta. <span className="text-ink/60">¿Confías en ellos?</span>
         </p>
         <div className="mt-5 space-y-2.5">
           <div className="flex items-center gap-3 rounded-2xl border-2 border-lime bg-lime/10 p-3.5">
@@ -456,7 +457,7 @@ function PlayerSlide() {
           </div>
         </div>
         <p className="mt-6 text-center text-xs font-semibold">3 de 4 han votado</p>
-        <p className="mt-1 text-center text-[10px] text-ink/45">Votan en secreto.</p>
+        <p className="mt-1 text-center text-[10px] text-ink/60">Votan en secreto.</p>
       </Phone>
     </div>
   )
@@ -530,7 +531,7 @@ function AdminSlide() {
             <div className="pixel mt-5 rounded-full bg-lime px-5 py-3.5 text-center text-[9px] leading-snug text-black">Cerrar puerta y revelar</div>
             <div className="mt-2.5 grid grid-cols-2 gap-2.5">
               <div className="pixel rounded-full border border-line bg-pale py-3 text-center text-[8px] text-ink/70">Pausar</div>
-              <div className="pixel rounded-full border border-line bg-pale py-3 text-center text-[8px] text-ink/30">Reanudar</div>
+              <div className="pixel rounded-full border border-line bg-pale py-3 text-center text-[8px] text-ink/60">Reanudar</div>
             </div>
           </div>
           <div className="card p-4">
@@ -589,8 +590,8 @@ function Card({ c }: { c: (typeof CARDS)[number] }) {
       <div className="glass absolute inset-x-3 bottom-3 rounded-2xl p-3.5 sm:p-4">
         <p className="label text-[8px] text-white/60">{c.meta}</p>
         <h3 className="pixel mt-2 text-[11px] text-white sm:text-[13px]">{c.title}</h3>
-        <p className="mt-1.5 text-[13px] leading-snug text-white/80">{c.desc}</p>
-        <p className="mt-2 text-[11px] text-white/50">{c.handle}</p>
+        <p className="mt-1.5 text-[13px] leading-snug text-white">{c.desc}</p>
+        <p className="mt-2 text-[11px] text-white/70">{c.handle}</p>
       </div>
     </article>
   )
