@@ -10,7 +10,7 @@ export const TEAM_HEX: Record<string, string> = {
 }
 
 export const TEAM_NAME: Record<string, string> = {
-  red: 'Rojo',
+  red: 'Rosa',
   blue: 'Azul',
   green: 'Verde',
   yellow: 'Amarillo',

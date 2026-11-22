@@ -17,7 +17,7 @@ Tecnologias
 Como se juega
 -------------
 
-1. El servidor reparte a los participantes al azar en hasta 4 equipos equilibrados (rojo, azul, verde, amarillo).
+1. El servidor reparte a los participantes al azar en hasta 4 equipos equilibrados (rosa, azul, verde, amarillo).
 2. 10 puertas, cada una con una pregunta facil y 25 segundos. El primer miembro del equipo que responde fija la respuesta de todos; no hay lider.
 3. Si el equipo acierta, gana la llave de su color. Si falla o no responde, un miembro al azar queda eliminado con un mensaje dramatico y el equipo sigue con uno menos.
 4. La ultima puerta (traicion). Cada sobreviviente vota en secreto "salimos todos" o "salgo yo solo":

@@ -240,7 +240,7 @@ const CAPS = [
   {
     id: 'equipo',
     tab: 'En equipo',
-    text: 'El sistema reparte a todos al azar en hasta cuatro equipos equilibrados: rojo, azul, verde y amarillo. En cada puerta responde quien se anime primero, y esa respuesta vale por todo el equipo. Si aciertan, ganan una llave. Si fallan, un compañero al azar queda fuera.',
+    text: 'El sistema reparte a todos al azar en hasta cuatro equipos equilibrados: rosa, azul, verde y amarillo. En cada puerta responde quien se anime primero, y esa respuesta vale por todo el equipo. Si aciertan, ganan una llave. Si fallan, un compañero al azar queda fuera.',
     cta: 'Ver las puertas',
     href: '#puertas',
   },
@@ -374,7 +374,7 @@ function PlayerSlide() {
           <div className="space-y-2">
             <span className="inline-flex items-center gap-2 rounded-full border border-line bg-pale px-2.5 py-1.5">
               <span className="h-3 w-3 rounded-full bg-[#ff3d86]" />
-              <span className="label text-[8px] text-ink/70">Equipo Rojo</span>
+              <span className="label text-[8px] text-ink/70">Equipo Rosa</span>
             </span>
             <p className="label block text-[8px]">Puerta 3 de 10</p>
           </div>
@@ -449,7 +449,7 @@ function FakeQr() {
 }
 
 const TEAMS = [
-  ['#ff3d86', 'Rojo', '3/4 vivos · 2 llaves'],
+  ['#ff3d86', 'Rosa', '3/4 vivos · 2 llaves'],
   ['#3158f5', 'Azul', '4/4 vivos · 3 llaves'],
   ['#22c55e', 'Verde', '2/4 vivos · 1 llave'],
   ['#ffd51a', 'Amarillo', '4/4 vivos · 3 llaves'],

@@ -306,7 +306,7 @@ select tests.ok(tests.state(:'a2')->>'group_choice' = '1', 'y qué opción eligi
 select tests.ok(tests.state(:'a2')->>'answered_by' = :'a1', 'y quién respondió');
 select tests.ok(not (tests.state(:'a2') ? 'is_correct'), 'nadie ve si acertó antes del reveal');
 select tests.answer_group(:'g2'::uuid, 0, 1);       -- verde acierta
-select tests.answer_group(:'g3'::uuid, 0, 1);       -- rojo acierta
+select tests.answer_group(:'g3'::uuid, 0, 1);       -- rosa acierta
 select tests.answer_group(:'g4'::uuid, 0, 0);       -- amarillo falla
 
 -- Revelar: llave para los que acertaron, un eliminado para el que falló.
@@ -361,7 +361,7 @@ select tests.ok((:'snap2'::jsonb)->'game'->>'status' = 'betrayal', 'tras la puer
 select tests.ok((:'snap2'::jsonb)->'game'->'current_question' = 'null'::jsonb, 'sin pregunta en pantalla');
 select tests.ok(((:'snap2'::jsonb)->'game'->>'phase_ms')::int = 45000, 'votación de 45 s');
 select tests.ok(tests.gval(:'gid'::uuid, 0, 'key_count') = '10' and tests.gval(:'gid'::uuid, 1, 'key_count') = '10'
-                and tests.gval(:'gid'::uuid, 2, 'key_count') = '10', 'azul, verde y rojo reunieron las 10 llaves');
+                and tests.gval(:'gid'::uuid, 2, 'key_count') = '10', 'azul, verde y rosa reunieron las 10 llaves');
 select tests.ok(tests.gval(:'gid'::uuid, 3, 'key_count') = '8', 'amarillo reunió 8 llaves');
 select tests.ok(tests.gval(:'gid'::uuid, 3, 'outcome') = 'trap', 'un único sobreviviente pasa directo a la prueba final');
 select tests.ok(tests.gval(:'gid'::uuid, 0, 'outcome') is null and tests.gval(:'gid'::uuid, 2, 'outcome') is null, 'los demás deben votar');
@@ -405,7 +405,7 @@ select tests.vote(:'s1', 'steal');
 select tests.vote(:'s2', 'share');
 select tests.vote(:'s3', 'share');
 
--- Rojo: dos traidores; el tercero se duerme y no vota.
+-- Rosa: dos traidores; el tercero se duerme y no vota.
 select tests.nth_active(:'g3'::uuid, 1) as t1, tests.nth_active(:'g3'::uuid, 2) as t2,
        tests.nth_active(:'g3'::uuid, 3) as t3 \gset
 select tests.vote(:'t1', 'steal');
@@ -430,8 +430,8 @@ select tests.ok((select bool_or(x->>'elimination_reason' like 'Traicionado por '
                  from jsonb_array_elements(tests.state(:'s2')->'members') x
                  where x->>'player_name' = :'s2'), 'los traicionados saben quién los traicionó');
 
--- Rojo: dos traidores se anulan; el que cooperó pasa a la prueba final.
-select tests.ok(tests.gval(:'gid'::uuid, 2, 'outcome') = 'trap' and tests.alive(:'gid'::uuid, 2) = 1, 'rojo: los traidores caen, el cooperador sigue');
+-- Rosa: dos traidores se anulan; el que cooperó pasa a la prueba final.
+select tests.ok(tests.gval(:'gid'::uuid, 2, 'outcome') = 'trap' and tests.alive(:'gid'::uuid, 2) = 1, 'rosa: los traidores caen, el cooperador sigue');
 select tests.ok((select bool_or(x->>'elimination_reason' like 'Dos traidores%')
                  from jsonb_array_elements(tests.state(:'t3')->'members') x
                  where x->>'player_name' = :'t1'), 'mensaje de traidores anulados');
@@ -455,7 +455,7 @@ select tests.err($q$select tests.answer_as('$q$ || :'s2' || $q$', 10, 0)$q$, 'no
 select tests.err($q$select tests.answer_as('$q$ || :'s1' || $q$', 10, 0)$q$, 'not_in_trial');
 
 select tests.answer_group(:'g1'::uuid, 10, tests.correct(10));              -- azul acierta
-select tests.answer_group(:'g3'::uuid, 10, (tests.correct(10) + 1) % 4);    -- rojo falla
+select tests.answer_group(:'g3'::uuid, 10, (tests.correct(10) + 1) % 4);    -- rosa falla
 select tests.answer_group(:'g4'::uuid, 10, tests.correct(10));              -- amarillo acierta
 select tests.err($q$select tests.answer_as('$q$ || :'a2' || $q$', 10, 0)$q$, 'group_already_answered');
 
@@ -464,7 +464,7 @@ select tests.ok((:'rt'::jsonb)->>'status' = 'trial_reveal', 'prueba final resuel
 select tests.ok((:'rt'::jsonb)->'reveal'->>'correct_index' = tests.correct(10)::text, 'se publica la solución de la prueba final');
 select tests.ok(tests.gval(:'gid'::uuid, 0, 'outcome') = 'escaped' and tests.escaped(:'gid'::uuid, 0) = 3, 'azul escapa entero');
 select tests.ok(tests.gval(:'gid'::uuid, 3, 'outcome') = 'escaped' and tests.escaped(:'gid'::uuid, 3) = 1, 'amarillo escapa con su sobreviviente');
-select tests.ok(tests.gval(:'gid'::uuid, 2, 'outcome') = 'reset' and tests.gval(:'gid'::uuid, 2, 'key_count') = '0', 'rojo falló: vuelve al nivel cero');
+select tests.ok(tests.gval(:'gid'::uuid, 2, 'outcome') = 'reset' and tests.gval(:'gid'::uuid, 2, 'key_count') = '0', 'rosa falló: vuelve al nivel cero');
 select tests.ok(jsonb_array_length(tests.state(:'t3')->'keys') = 0, 'y pierde sus llaves');
 select tests.ok(tests.gval(:'gid'::uuid, 0, 'key_count') = '10' and tests.gval(:'gid'::uuid, 3, 'key_count') = '8', 'los que escaparon conservan sus llaves');
 select tests.ok(tests.gval(:'gid'::uuid, 1, 'outcome') = 'lone_winner', 'el traidor sigue siendo ganador');
@@ -475,7 +475,7 @@ select public.admin_next('TESTPIN', :'gid'::uuid)->>'status' as fin \gset
 select tests.ok(:'fin' = 'finished', 'partida finalizada');
 select tests.err($q$select public.join_game('$q$ || :'code' || $q$', 'Tarde2')$q$, 'game_finished');
 select tests.err($q$select public.admin_finish('TESTPIN', '$q$ || :'gid' || $q$'::uuid)$q$, 'invalid_state');
--- azul 10+1, verde 10, rojo 10+1, amarillo 9+1 (no respondió la puerta 2) = 42
+-- azul 10+1, verde 10, rosa 10+1, amarillo 9+1 (no respondió la puerta 2) = 42
 select tests.ok(jsonb_array_length(public.admin_snapshot('TESTPIN', :'gid'::uuid)->'group_answers') = 42,
                 'snapshot: 42 respuestas de equipo (puertas + prueba final)');
 select tests.ok(jsonb_array_length(public.admin_snapshot('TESTPIN', :'gid'::uuid)->'players') = 12, 'snapshot: 12 jugadores');
@@ -501,7 +501,7 @@ select (:'snapb'::jsonb)->'groups'->0->>'id' as b1, (:'snapb'::jsonb)->'groups'-
        (:'snapb'::jsonb)->'groups'->2->>'id' as b3, (:'snapb'::jsonb)->'groups'->3->>'id' as b4 \gset
 select public.admin_start('TESTPIN', :'gbid'::uuid) is not null as a \gset
 
--- Correcciones manuales sobre el equipo rojo: lo dejan sin miembros.
+-- Correcciones manuales sobre el equipo rosa: lo dejan sin miembros.
 select tests.err($q$select public.eliminate_random_member('TESTPIN', '$q$ || :'b3' || $q$'::uuid, 5)$q$, 'stale_question');
 select tests.ok((public.eliminate_random_member('TESTPIN', :'b3'::uuid, 0))->>'eliminated' = 'true', 'eliminación manual 1');
 select tests.ok(tests.alive(:'gbid'::uuid, 2) = 1 and tests.gval(:'gbid'::uuid, 2, 'outcome') is null, 'rojo queda con 1 y sigue en juego');
