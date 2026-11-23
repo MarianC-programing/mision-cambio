@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import * as api from '../../lib/api'
 import { useRoomPresence } from '../../lib/realtime'
 import { supabase } from '../../lib/supabase'
-import type { AdminQuestion, Snapshot } from '../../lib/types'
+import type { AdminQuestion, Snapshot, Variant } from '../../lib/types'
 
 export function useAdmin(pin: string, onUnauthorized: () => void) {
   const [gameId, setGameId] = useState<string | null>(null)
@@ -115,7 +115,8 @@ export function useAdmin(pin: string, onUnauthorized: () => void) {
     resume: () => run(() => api.adminResume(pin, id)),
     reveal: () => run(() => api.adminReveal(pin, id)),
     next: () => run(() => api.adminNext(pin, id)),
-    resolveBetrayal: () => run(() => api.adminResolveBetrayal(pin, id)),
+    resolveBetrayal: (variant?: Variant) => run(() => api.adminResolveBetrayal(pin, id, variant)),
+    resolveVariant: () => run(() => api.adminResolveVariant(pin, id)),
     startTrial: () => run(() => api.adminStartTrial(pin, id)),
     resolveTrial: () => run(() => api.adminResolveTrial(pin, id)),
     finish: () => run(() => api.adminFinish(pin, id)),
@@ -146,7 +147,9 @@ export const STATUS_LABEL = {
   reveal: 'Respuesta mostrada',
   betrayal: 'Votación de traición',
   betrayal_reveal: 'Traición resuelta',
-  trial: 'Prueba final',
-  trial_reveal: 'Prueba final resuelta',
+  variant: 'Variante de la traición',
+  variant_reveal: 'Variante resuelta',
+  trial: 'Ronda difícil',
+  trial_reveal: 'Pregunta difícil resuelta',
   finished: 'Finalizada',
 } as const

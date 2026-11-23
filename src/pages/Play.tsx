@@ -4,13 +4,15 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { Logo, LogoTile, PixelIcon, type PixelName } from '../components/pixel'
 import { Badge, Button, Label, TimerRing } from '../components/ui'
-import { ApiError, myGroupState, submitGroupAnswer, submitVote } from '../lib/api'
+import { ApiError, myGroupState, submitAccusation, submitDuelAnswer, submitGroupAnswer, submitVote } from '../lib/api'
 import { clearSession, loadSession, useCountdown, useServerOffset } from '../lib/clock'
 import { useGame, usePresenceTrack } from '../lib/realtime'
-import { dramatize, isTimed, phaseTotalMs, survivors, teamHex, teamName } from '../lib/teams'
-import type { Game, Group, GroupMember, GroupState, Session, Vote } from '../lib/types'
+import { dramatize, isTimed, phaseTotalMs, survivors, teamHex, teamName, VARIANT_NAME } from '../lib/teams'
+import type { FinaleVote, Game, Group, GroupMember, GroupState, Session, Vote } from '../lib/types'
 
 const LETTERS = ['A', 'B', 'C', 'D']
+/** Posición de la primera pregunta de la ronda difícil (la 10 es la del duelo). */
+const HARD_BASE = 11
 
 interface Ctx {
   session: Session
@@ -118,6 +120,12 @@ function PlayInner({ session }: { session: Session }) {
     case 'betrayal_reveal':
       body = <BetrayalRevealView ctx={ctx} />
       break
+    case 'variant':
+      body = <VariantView ctx={ctx} />
+      break
+    case 'variant_reveal':
+      body = <VariantRevealView ctx={ctx} />
+      break
     case 'trial':
       body = <TrialView ctx={ctx} />
       break
@@ -182,15 +190,20 @@ function KeyBar({ ctx }: { ctx: Ctx }) {
   const have = new Set(ctx.gs.keys.map((k) => k.question_pos))
   const color = ctx.grp?.color
   const icon = color === 'yellow' ? 'text-black' : 'text-white'
+  const hardStage =
+    ctx.game.status === 'trial' || ctx.game.status === 'trial_reveal' || [...have].some((p) => p >= HARD_BASE)
+  const slots = hardStage
+    ? Array.from({ length: ctx.game.hard_total }, (_, i) => HARD_BASE + i)
+    : Array.from({ length: ctx.game.q_total }, (_, i) => i)
   return (
     <div className="flex flex-wrap items-center justify-center gap-1.5" aria-label={`${have.size} llaves`}>
-      {Array.from({ length: ctx.game.q_total }, (_, i) => (
+      {slots.map((pos) => (
         <span
-          key={i}
-          className={`grid h-6 w-6 place-items-center rounded-md border ${have.has(i) ? 'border-transparent' : 'border-line bg-pale'}`}
-          style={have.has(i) ? { backgroundColor: teamHex(color) } : undefined}
+          key={pos}
+          className={`grid h-6 w-6 place-items-center rounded-md border ${have.has(pos) ? 'border-transparent' : 'border-line bg-pale'}`}
+          style={have.has(pos) ? { backgroundColor: teamHex(color) } : undefined}
         >
-          {have.has(i) && <PixelIcon name="key" className={`h-3.5 w-3.5 ${icon}`} />}
+          {have.has(pos) && <PixelIcon name="key" className={`h-3.5 w-3.5 ${icon}`} />}
         </span>
       ))}
     </div>
@@ -289,7 +302,9 @@ function LobbyView({ ctx }: { ctx: Ctx }) {
 /* Puertas y prueba final                                              */
 /* ------------------------------------------------------------------ */
 
-function QuestionView({ ctx, trial = false }: { ctx: Ctx; trial?: boolean }) {
+function QuestionView({ ctx, mode = 'door' }: { ctx: Ctx; mode?: 'door' | 'trial' | 'duel' }) {
+  const trial = mode === 'trial'
+  const duel = mode === 'duel'
   const { game, gs, grp, session, remaining, refresh } = ctx
   const q = game.current_question
   const [pending, setPending] = useState<number | null>(null)
@@ -300,8 +315,8 @@ function QuestionView({ ctx, trial = false }: { ctx: Ctx; trial?: boolean }) {
   }, [game.q_index])
 
   if (!q) return null
-  const answered = gs.answered
-  const chosen = gs.group_choice
+  const answered = duel ? gs.my_duel_choice !== null : gs.answered
+  const chosen = duel ? gs.my_duel_choice : gs.group_choice
   const timeUp = remaining === 0
   const canAnswer = !answered && !timeUp && pending === null
 
@@ -310,7 +325,8 @@ function QuestionView({ ctx, trial = false }: { ctx: Ctx; trial?: boolean }) {
     setPending(i)
     setError('')
     try {
-      await submitGroupAnswer(session, game.q_index, i)
+      if (duel) await submitDuelAnswer(session, game.q_index, i)
+      else await submitGroupAnswer(session, game.q_index, i)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo enviar.')
     } finally {
@@ -326,9 +342,9 @@ function QuestionView({ ctx, trial = false }: { ctx: Ctx; trial?: boolean }) {
           <div className="space-y-2.5">
             <TeamChip color={grp?.color} />
             <div>
-              <Label>{trial ? 'Prueba final' : `Puerta ${game.q_index + 1} de ${game.q_total}`}</Label>
+              <Label>{duel ? 'Duelo de traidores' : trial ? `Ronda difícil ${game.q_index - 10} de ${game.hard_total}` : `Puerta ${game.q_index + 1} de ${game.q_total}`}</Label>
               <div className="mt-2">
-                <Badge tone={trial ? 'pink' : 'purple'}>{q.model}</Badge>
+                <Badge tone={trial || duel ? 'pink' : 'purple'}>{q.model}</Badge>
               </div>
             </div>
           </div>
@@ -337,7 +353,12 @@ function QuestionView({ ctx, trial = false }: { ctx: Ctx; trial?: boolean }) {
 
         {trial && (
           <p className="mb-2 rounded-2xl border border-pink/30 bg-pink/10 px-4 py-2.5 text-center text-xs font-semibold text-pink">
-            Si fallan, vuelven al nivel cero y pierden todas las llaves. Sin presión.
+            Ronda difícil: cada error o silencio elimina a DOS de ustedes.
+          </p>
+        )}
+        {duel && (
+          <p className="mb-2 rounded-2xl border border-pink/30 bg-pink/10 px-4 py-2.5 text-center text-xs font-semibold text-pink">
+            Duelo de velocidad: el primero en acertar escapa solo. Los demás traidores caen.
           </p>
         )}
 
@@ -383,17 +404,19 @@ function QuestionView({ ctx, trial = false }: { ctx: Ctx; trial?: boolean }) {
           {error && <p className="rounded-2xl border border-pink/30 bg-pink/10 px-4 py-3 text-sm font-medium text-pink">{error}</p>}
           {answered ? (
             <p className="rounded-2xl border border-lime/40 bg-lime/10 px-4 py-3 text-center text-sm font-semibold">
-              Su equipo eligió <b>{chosen !== null ? LETTERS[chosen] : '?'}</b>
-              {gs.answered_by ? ` (respondió ${gs.answered_by})` : ''}. Ahora a rezar…
+              {duel ? 'Elegiste' : 'Su equipo eligió'} <b>{chosen !== null ? LETTERS[chosen] : '?'}</b>
+              {!duel && gs.answered_by ? ` (respondió ${gs.answered_by})` : ''}. Ahora a rezar…
             </p>
           ) : timeUp ? (
             <p className="rounded-2xl border border-orange/40 bg-orange/10 px-4 py-3 text-center text-sm font-semibold text-orange">
-              Se acabó el tiempo. Su equipo no respondió. La puerta tiene hambre.
+              Se acabó el tiempo. {duel ? 'No respondiste.' : 'Su equipo no respondió.'} La puerta tiene hambre.
             </p>
           ) : (
-            <p className="text-center text-xs text-ink/60">El primero que responda decide por todo el equipo. Sí, incluso si se equivoca.</p>
+            <p className="text-center text-xs text-ink/60">
+              {duel ? 'Responde rápido: solo cuenta el primero en acertar.' : 'El primero que responda decide por todo el equipo. Sí, incluso si se equivoca.'}
+            </p>
           )}
-          {!trial && <KeyBar ctx={ctx} />}
+          {!duel && <KeyBar ctx={ctx} />}
         </div>
       </div>
     </div>
@@ -510,12 +533,152 @@ function RevealView({ ctx }: { ctx: Ctx }) {
 /* La última puerta: traición                                          */
 /* ------------------------------------------------------------------ */
 
-function BetrayalView({ ctx }: { ctx: Ctx }) {
-  const { game, gs, grp, meElim, remaining, session, refresh } = ctx
+const NUDGES = [
+  'Lo lógico es cruzar la puerta. Tu equipo ya lo está pensando.',
+  'Si solo uno traiciona, los demás caen. ¿Vas a ser tú el que espera?',
+  'Cooperar es la opción más cara: empiezan de cero.',
+  'Nadie va a ver tu voto. Todavía.',
+  '¿Y si ellos votan salir y tú no?',
+]
+
+/** Frase que rota cada pocos segundos para meter ruido en la cabeza. */
+function useNudge(list: string[], ms = 4500) {
+  const [i, setI] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setI((x) => (x + 1) % list.length), ms)
+    return () => clearInterval(t)
+  }, [list.length, ms])
+  return list[i % list.length]
+}
+
+function VoteOption({ kind, active, disabled, highlight, onClick, icon, title, desc }: {
+  kind: Vote
+  active: boolean
+  disabled: boolean
+  highlight?: boolean
+  onClick: () => void
+  icon: ReactNode
+  title: string
+  desc: string
+}) {
+  const on = kind === 'steal' ? 'border-pink bg-pink/10' : 'border-lime bg-lime/10'
+  const idle = highlight ? 'border-pink/50 bg-pink/5 enabled:hover:border-pink' : 'border-line bg-pale enabled:hover:border-white/30'
+  return (
+    <motion.button
+      whileTap={!disabled ? { scale: 0.98 } : undefined}
+      disabled={disabled}
+      onClick={onClick}
+      aria-pressed={active}
+      className={`flex w-full items-center gap-4 rounded-3xl border-2 p-5 text-left transition disabled:cursor-default ${active ? on : idle} ${disabled && !active ? 'opacity-50' : ''}`}
+    >
+      {icon}
+      <span>
+        <span className="block text-lg font-extrabold">{title}</span>
+        <span className="text-sm text-ink/60">{desc}</span>
+      </span>
+      {active && <PixelIcon name="check" className={`ml-auto h-4 w-4 shrink-0 ${kind === 'steal' ? 'text-pink' : 'text-lime'}`} />}
+    </motion.button>
+  )
+}
+
+/** Pantalla de voto compartida por la traición original y la segunda vuelta (variante B). */
+function VotePanel({ ctx, label, title, lead, stealDesc, shareDesc, nudges }: {
+  ctx: Ctx
+  label: string
+  title: ReactNode
+  lead: ReactNode
+  stealDesc: string
+  shareDesc: string
+  nudges: string[]
+}) {
+  const { game, gs, grp, remaining, session, refresh } = ctx
   const [pending, setPending] = useState<Vote | null>(null)
   const [error, setError] = useState('')
-  const alive = survivors(gs).length
+  const nudge = useNudge(nudges)
+  useEffect(() => {
+    setPending(null)
+    setError('')
+  }, [game.variant_round])
+
+  const alive = gs.members.filter((m) => !m.eliminated && !m.escaped).length
   const timeUp = remaining === 0
+  const current = pending ?? gs.my_vote
+
+  const vote = async (v: Vote) => {
+    if (timeUp || pending) return
+    setPending(v)
+    setError('')
+    try {
+      await submitVote(session, v)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo enviar el voto.')
+    } finally {
+      await refresh()
+      setPending(null)
+    }
+  }
+
+  return (
+    <div className="flex flex-1 flex-col lg:grid lg:grid-cols-2 lg:items-center lg:gap-16">
+      <div>
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="space-y-2.5">
+            <TeamChip color={grp?.color} />
+            <Label className="block">{label}</Label>
+          </div>
+          <TimerRing ms={remaining} totalMs={phaseTotalMs(game)} size={84} />
+        </div>
+
+        <h2 className="pixel mt-5 text-[clamp(1.1rem,5.4vw,2.4rem)] leading-snug">{title}</h2>
+        <p className="mt-4 text-sm leading-relaxed text-ink/60 md:text-base">{lead}</p>
+        <p className="mt-4 rounded-2xl border border-pink/30 bg-pink/10 px-4 py-3 text-sm font-semibold text-pink" aria-live="off">
+          {nudge}
+        </p>
+      </div>
+
+      <div className="flex flex-1 flex-col lg:flex-none">
+        <div className="mt-5 space-y-3 lg:mt-0">
+          {/* La traición va primero: se presenta como la salida obvia. */}
+          <VoteOption
+            kind="steal"
+            highlight
+            active={current === 'steal'}
+            disabled={timeUp}
+            onClick={() => void vote('steal')}
+            icon={<PixelIcon name="sword" className="h-10 w-10 shrink-0 text-pink" />}
+            title="Salgo yo solo"
+            desc={stealDesc}
+          />
+          <VoteOption
+            kind="share"
+            active={current === 'share'}
+            disabled={timeUp}
+            onClick={() => void vote('share')}
+            icon={<Logo className="h-10 w-10 shrink-0" />}
+            title="Salvarnos todos juntos"
+            desc={shareDesc}
+          />
+        </div>
+
+        <div className="mt-auto space-y-2 pt-6 text-center">
+          {error && <p className="rounded-2xl border border-pink/30 bg-pink/10 px-4 py-3 text-sm font-medium text-pink">{error}</p>}
+          <p className="text-sm font-semibold">
+            {gs.votes_cast} de {alive} han votado
+          </p>
+          <p className="text-xs text-ink/60">
+            {timeUp
+              ? 'Votación cerrada. Esperando al profesor…'
+              : 'Puedes cambiar tu voto hasta que se acabe el tiempo. Si no votas, cuentas como «salvarnos todos juntos».'}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function BetrayalView({ ctx }: { ctx: Ctx }) {
+  const { gs, grp, meElim } = ctx
+  const alive = survivors(gs).length
 
   if (grp?.outcome === 'wiped' || (alive === 0 && grp)) {
     return (
@@ -531,104 +694,64 @@ function BetrayalView({ ctx }: { ctx: Ctx }) {
       </Status>
     )
   }
-  if (grp?.outcome === 'trap') {
+  if (grp?.outcome === 'hard') {
     return (
       <Status icon="key" label="La última puerta" title="Estás solo" tone="ink">
         <p>Eres el único que sigue vivo en tu equipo: nadie a quien traicionar, nadie que te traicione.</p>
-        <p className="font-semibold text-ink">Pasas directo a la prueba final.</p>
+        <p className="font-semibold text-ink">Pasas directo a la ronda difícil, empezando de cero.</p>
       </Status>
     )
   }
 
-  const vote = async (v: Vote) => {
-    if (timeUp || pending) return
-    setPending(v)
-    setError('')
-    try {
-      await submitVote(session, v)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo enviar el voto.')
-    } finally {
-      await refresh()
-      setPending(null)
-    }
-  }
-  const current = pending ?? gs.my_vote
-
   return (
-    <div className="flex flex-1 flex-col lg:grid lg:grid-cols-2 lg:items-center lg:gap-16">
-      <div>
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <div className="space-y-2.5">
-            <TeamChip color={grp?.color} />
-            <Label className="block">La última puerta</Label>
-          </div>
-          <TimerRing ms={remaining} totalMs={phaseTotalMs(game)} size={84} />
-        </div>
+    <VotePanel
+      ctx={ctx}
+      label="La última puerta"
+      title={
+        <>
+          Solo una puerta. <span className="text-ink/60">Lo lógico es cruzarla.</span>
+        </>
+      }
+      lead={
+        <>
+          Cada uno vota <b className="text-ink">en secreto</b>. Si todos se salvan juntos, la puerta se sella: empiezan de{' '}
+          <b className="text-ink">cero</b> y nadie sale gratis.
+        </>
+      }
+      stealDesc="La salida obvia. Si eres el único que traiciona, cruzas ahora mismo y ganas. Los demás se quedan."
+      shareDesc="Empiezan de CERO: pierden todas las llaves y enfrentan preguntas MUCHO más difíciles. Cada error elimina a DOS."
+      nudges={NUDGES}
+    />
+  )
+}
 
-        <h2 className="pixel mt-5 text-[clamp(1.1rem,5.4vw,2.4rem)] leading-snug">
-          Solo una puerta. <span className="text-ink/60">¿Confías en ellos?</span>
-        </h2>
-        <p className="mt-4 text-sm leading-relaxed text-ink/60 md:text-base">
-          Cada uno vota <b className="text-ink">en secreto</b>. Lo que pase depende de cuántos de ustedes traicionen. Mira a tus
-          compañeros a los ojos. O mejor no.
-        </p>
-      </div>
-
-      <div className="flex flex-1 flex-col lg:flex-none">
-        <div className="mt-5 space-y-3 lg:mt-0">
-          <motion.button
-            whileTap={!timeUp ? { scale: 0.98 } : undefined}
-            disabled={timeUp}
-            onClick={() => void vote('share')}
-            className={`flex w-full items-center gap-4 rounded-3xl border-2 p-5 text-left transition disabled:cursor-default ${
-              current === 'share' ? 'border-lime bg-lime/10' : 'border-line bg-pale enabled:hover:border-white/30'
-            } ${timeUp && current !== 'share' ? 'opacity-50' : ''}`}
-          >
-            <Logo className="h-10 w-10 shrink-0" />
-            <span>
-              <span className="block text-lg font-extrabold">Salimos todos</span>
-              <span className="text-sm text-ink/55">Cooperar con el equipo.</span>
+function VotesList({ votes, fallen }: { votes: FinaleVote[]; fallen?: string[] }) {
+  if (votes.length === 0) return null
+  return (
+    <div className="card mt-4 p-5">
+      <Label>Los votos</Label>
+      <ul className="mt-3 divide-y divide-line text-sm">
+        {votes.map((v) => (
+          <li key={v.player_id} className="flex items-center justify-between py-2.5">
+            <span className="font-semibold">{v.player_name}</span>
+            <span className={`flex items-center gap-2 font-bold ${v.vote === 'steal' ? 'text-pink' : 'text-ink'}`}>
+              {v.vote === 'steal' ? <PixelIcon name="sword" className="h-4 w-4" /> : <Logo className="h-4 w-4" />}
+              {v.vote === 'steal' ? 'Traicionó' : v.auto ? 'No votó' : 'Cooperó'}
             </span>
-            {current === 'share' && <PixelIcon name="check" className="ml-auto h-4 w-4 text-lime" />}
-          </motion.button>
-
-          <motion.button
-            whileTap={!timeUp ? { scale: 0.98 } : undefined}
-            disabled={timeUp}
-            onClick={() => void vote('steal')}
-            className={`flex w-full items-center gap-4 rounded-3xl border-2 p-5 text-left transition disabled:cursor-default ${
-              current === 'steal' ? 'border-pink bg-pink/10' : 'border-line bg-pale enabled:hover:border-white/30'
-            } ${timeUp && current !== 'steal' ? 'opacity-50' : ''}`}
-          >
-            <PixelIcon name="sword" className="h-10 w-10 shrink-0 text-pink" />
-            <span>
-              <span className="block text-lg font-extrabold">Salgo yo solo</span>
-              <span className="text-sm text-ink/55">Traicionar y cruzar la puerta.</span>
-            </span>
-            {current === 'steal' && <PixelIcon name="check" className="ml-auto h-4 w-4 text-pink" />}
-          </motion.button>
-        </div>
-
-        <div className="mt-auto space-y-2 pt-6 text-center">
-          {error && <p className="rounded-2xl border border-pink/30 bg-pink/10 px-4 py-3 text-sm font-medium text-pink">{error}</p>}
-          <p className="text-sm font-semibold">
-            {gs.votes_cast} de {alive} han votado
-          </p>
-          <p className="text-xs text-ink/60">
-            {timeUp ? 'Votación cerrada. Esperando al profesor…' : 'Puedes cambiar tu voto hasta que se acabe el tiempo. Si no votas, cuentas como «salimos todos».'}
-          </p>
-        </div>
-      </div>
+          </li>
+        ))}
+      </ul>
+      {fallen && fallen.length > 0 && <p className="mt-3 text-xs text-ink/60">Cayeron: {fallen.join(', ')}.</p>}
     </div>
   )
 }
 
 function BetrayalRevealView({ ctx }: { ctx: Ctx }) {
   const { grp, gs, me, meElim, session, game } = ctx
-  const votes = gs.votes
   const winnerName = gs.members.find((m) => m.player_id === grp?.winner_player_id)?.player_name
-  const fallen = gs.eliminations.filter((e) => e.question_pos === game.q_total)
+  const fallen = gs.eliminations.filter((e) => e.question_pos === game.q_total).map((e) => e.player_name)
+  const variant = game.betrayal_variant
+  const traitors = grp?.traitor_count ?? 0
 
   let head: ReactNode
   if (grp?.outcome === 'lone_winner') {
@@ -645,7 +768,21 @@ function BetrayalRevealView({ ctx }: { ctx: Ctx }) {
   } else if (grp?.outcome === 'wiped') {
     head = (
       <Status icon="skull" label="Traición" title="Nadie salió" tone="pink">
-        <p>Los traidores se anularon entre sí y el equipo se desmoronó. La codicia no paga.</p>
+        <p>El equipo se desmoronó. La codicia no paga.</p>
+      </Status>
+    )
+  } else if (grp?.outcome === 'dispute') {
+    head = (
+      <Status icon="sword" label="Traición" title="Varios traidores" tone="pink">
+        <p>
+          Traicionaron <b className="text-ink">{traitors}</b> de ustedes. Nadie cruza la puerta todavía: se abre una disputa.
+        </p>
+        <p className="font-semibold text-ink">
+          {variant ? `${VARIANT_NAME[variant]}.` : ''}{' '}
+          {variant === 'A' && (gs.my_vote === 'steal' ? 'Te enfrentarás a los otros traidores en un duelo de velocidad.' : 'Los traidores se enfrentarán en un duelo de velocidad. Tú esperas.')}
+          {variant === 'B' && 'Se repite la votación sin decir quiénes traicionaron. Tendrán que confiar otra vez… o no.'}
+          {variant === 'C' && 'Cada uno señalará a quien crea que traicionó. Ojo: acusar a un inocente se paga.'}
+        </p>
       </Status>
     )
   } else if (meElim) {
@@ -656,8 +793,11 @@ function BetrayalRevealView({ ctx }: { ctx: Ctx }) {
     )
   } else {
     head = (
-      <Status icon="logo" label="Traición" title="La puerta se selló" tone="ink">
-        <p>No hubo un único traidor. Solo queda la <b className="text-ink">prueba final</b>.</p>
+      <Status icon="lock" label="Traición" title="La puerta se selló" tone="ink">
+        <p>Nadie traicionó… y por eso mismo no se abre gratis.</p>
+        <p className="font-semibold text-ink">
+          Empiezan de <b>cero</b>: pierden todas las llaves y juegan la ronda difícil. Cada error elimina a DOS.
+        </p>
       </Status>
     )
   }
@@ -665,80 +805,344 @@ function BetrayalRevealView({ ctx }: { ctx: Ctx }) {
   return (
     <Narrow>
       {head}
-      {votes.length > 0 && (
-        <div className="card mt-4 p-5">
-          <Label>Los votos</Label>
-          <ul className="mt-3 divide-y divide-line text-sm">
-            {votes.map((v) => (
-              <li key={v.player_id} className="flex items-center justify-between py-2.5">
-                <span className="font-semibold">{v.player_name}</span>
-                <span className={`flex items-center gap-2 font-bold ${v.vote === 'steal' ? 'text-pink' : 'text-ink'}`}>
-                  {v.vote === 'steal' ? <PixelIcon name="sword" className="h-4 w-4" /> : <Logo className="h-4 w-4" />}
-                  {v.vote === 'steal' ? 'Traicionó' : v.auto ? 'No votó' : 'Cooperó'}
-                </span>
-              </li>
-            ))}
-          </ul>
-          {fallen.length > 0 && (
-            <p className="mt-3 text-xs text-ink/60">Cayeron: {fallen.map((f) => f.player_name).join(', ')}.</p>
-          )}
-        </div>
-      )}
+      <VotesList votes={gs.votes} fallen={fallen} />
     </Narrow>
   )
 }
 
 /* ------------------------------------------------------------------ */
-/* Prueba final                                                        */
+/* Variantes de la traición (A duelo · B segunda vuelta · C acusación) */
 /* ------------------------------------------------------------------ */
 
-function TrialView({ ctx }: { ctx: Ctx }) {
-  const { grp, meElim, me } = ctx
-  const inTrial = grp?.outcome === 'trap' && !meElim
-  if (inTrial) return <QuestionView ctx={ctx} trial />
+function VariantView({ ctx }: { ctx: Ctx }) {
+  const { game, grp, me, meElim } = ctx
+  const inDispute = grp?.outcome === 'dispute' && !meElim && !me?.escaped
+  if (!inDispute) return <VariantWaiting ctx={ctx} />
+  if (game.betrayal_variant === 'A') return <DuelView ctx={ctx} />
+  if (game.betrayal_variant === 'B') return <Revote ctx={ctx} />
+  return <AccuseView ctx={ctx} />
+}
+
+function VariantWaiting({ ctx }: { ctx: Ctx }) {
+  const { grp, me, meElim, game } = ctx
+  const name = game.betrayal_variant ? VARIANT_NAME[game.betrayal_variant] : 'La variante'
   if (me?.escaped) {
     return (
-      <Status icon="trophy" label="Prueba final" title="Ya escapaste" tone="lime">
-        <p>Mientras tanto, otros equipos se juegan la última prueba. Sírvete algo de beber.</p>
+      <Status icon="trophy" label={name} title="Ya escapaste" tone="lime">
+        <p>Mientras tanto, otros equipos resuelven su traición. Sírvete algo de beber.</p>
+      </Status>
+    )
+  }
+  if (meElim) {
+    return (
+      <Status icon="skull" label={name} title="Miras desde fuera" tone="pink">
+        <p>Quienes siguen vivos resuelven la disputa sin ti. Solo puedes mirar y juzgar.</p>
+      </Status>
+    )
+  }
+  if (grp?.outcome === 'wiped') {
+    return (
+      <Status icon="skull" label={name} title="Su equipo cayó" tone="pink">
+        <p>No queda nadie en tu equipo.</p>
       </Status>
     )
   }
   return (
-    <Status icon="skull" label="Prueba final" title="Miras desde fuera" tone="pink">
-      <p>{meElim ? 'Los equipos que sobrevivieron se juegan la prueba final.' : 'Tu equipo no llegó a la prueba final.'}</p>
+    <Status icon="key" label={name} title="Tu equipo espera" tone="ink">
+      <p>Otros equipos resuelven una disputa por traición ({name}). Cuando terminen, empieza la ronda difícil.</p>
+      <p className="font-semibold text-ink">Ustedes empiezan de cero.</p>
+    </Status>
+  )
+}
+
+/** Variante A: solo los traidores responden; el primero en acertar escapa solo. */
+function DuelView({ ctx }: { ctx: Ctx }) {
+  const { gs, remaining, game } = ctx
+  const iAmTraitor = gs.my_vote === 'steal'
+  if (iAmTraitor) return <QuestionView ctx={ctx} mode="duel" />
+  const traitors = gs.votes.filter((v) => v.vote === 'steal').map((v) => v.player_name)
+  return (
+    <Status icon="sword" label="Duelo de traidores" title="Los traidores se enfrentan" tone="pink">
+      <p>
+        {traitors.length > 0 ? traitors.join(', ') : 'Los traidores'} responden una pregunta de velocidad. El primero en acertar escapa solo y los demás caen.
+      </p>
+      <p>Tú cooperaste: esperas a ver quién sobrevive.</p>
+      <div className="flex justify-center">
+        <TimerRing ms={remaining} totalMs={phaseTotalMs(game)} size={104} />
+      </div>
+    </Status>
+  )
+}
+
+/** Variante B: se revela cuántos traicionaron, no quiénes, y se vota otra vez. */
+function Revote({ ctx }: { ctx: Ctx }) {
+  const { game, grp } = ctx
+  const n = grp?.traitor_count ?? 0
+  const last = game.variant_round >= 3
+  return (
+    <VotePanel
+      ctx={ctx}
+      label={`Segunda vuelta · votación ${game.variant_round}`}
+      title={
+        <>
+          Hay traidores. <span className="text-ink/60">¿Y tú?</span>
+        </>
+      }
+      lead={
+        <>
+          Traicionaron <b className="text-ink">{n}</b> de ustedes. No se sabe quiénes. Vuelvan a votar.
+          {last && ' Es la última vuelta: si siguen traicionando dos o más, los traidores caen.'}
+        </>
+      }
+      stealDesc="Si eres el único que traiciona esta vuelta, escapas solo y ganas. Los demás caen."
+      shareDesc="Si nadie traiciona, empiezan de CERO en la ronda difícil. Cada error elimina a DOS."
+      nudges={[
+        'Ya sabes que hay traidores. ¿Seguro que quieres ser el que coopera?',
+        'Si solo uno traiciona ahora, los demás caen.',
+        'Nadie va a ver tu voto. Todavía.',
+      ]}
+    />
+  )
+}
+
+/** Variante C: cada sobreviviente señala a quien cree que traicionó. */
+function AccuseView({ ctx }: { ctx: Ctx }) {
+  const { game, gs, grp, session, remaining, refresh } = ctx
+  const [pending, setPending] = useState<string | null>(null)
+  const [error, setError] = useState('')
+  const mates = gs.members.filter((m) => !m.eliminated && !m.escaped && m.player_id !== session.playerId)
+  const current = pending ?? gs.my_accusation
+  const timeUp = remaining === 0
+  const n = grp?.traitor_count ?? 0
+
+  const accuse = async (id: string) => {
+    if (timeUp || pending) return
+    setPending(id)
+    setError('')
+    try {
+      await submitAccusation(session, id)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo enviar.')
+    } finally {
+      await refresh()
+      setPending(null)
+    }
+  }
+
+  return (
+    <div className="flex flex-1 flex-col lg:grid lg:grid-cols-2 lg:items-center lg:gap-16">
+      <div>
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="space-y-2.5">
+            <TeamChip color={grp?.color} />
+            <Label className="block">Acusación</Label>
+          </div>
+          <TimerRing ms={remaining} totalMs={phaseTotalMs(game)} size={84} />
+        </div>
+        <h2 className="pixel mt-5 text-[clamp(1.1rem,5.4vw,2.4rem)] leading-snug">
+          ¿Quién fue? <span className="text-ink/60">Señala a uno.</span>
+        </h2>
+        <p className="mt-4 text-sm leading-relaxed text-ink/60 md:text-base">
+          Traicionaron <b className="text-ink">{n}</b> de ustedes. Si señalas a un traidor, la puerta lo expulsa. Pero{' '}
+          <b className="text-ink">quien acuse a un inocente cae</b>.
+        </p>
+      </div>
+
+      <div className="flex flex-1 flex-col lg:flex-none">
+        <div className="mt-5 space-y-3 lg:mt-0">
+          {mates.map((m) => {
+            const on = current === m.player_id
+            return (
+              <motion.button
+                key={m.player_id}
+                whileTap={!timeUp ? { scale: 0.98 } : undefined}
+                disabled={timeUp}
+                onClick={() => void accuse(m.player_id)}
+                aria-pressed={on}
+                className={`flex w-full items-center gap-4 rounded-3xl border-2 p-5 text-left transition disabled:cursor-default ${
+                  on ? 'border-pink bg-pink/10' : 'border-line bg-pale enabled:hover:border-white/30'
+                } ${timeUp && !on ? 'opacity-50' : ''}`}
+              >
+                <PixelIcon name="sword" className="h-8 w-8 shrink-0 text-pink" />
+                <span className="text-lg font-extrabold">{m.player_name}</span>
+                {on && <PixelIcon name="check" className="ml-auto h-4 w-4 shrink-0 text-pink" />}
+              </motion.button>
+            )
+          })}
+          {mates.length === 0 && <p className="text-sm text-ink/60">No queda nadie a quien señalar.</p>}
+        </div>
+        <div className="mt-auto space-y-2 pt-6 text-center">
+          {error && <p className="rounded-2xl border border-pink/30 bg-pink/10 px-4 py-3 text-sm font-medium text-pink">{error}</p>}
+          <p className="text-xs text-ink/60">
+            {timeUp ? 'Acusaciones cerradas. Esperando al profesor…' : 'Puedes cambiar tu elección hasta que se acabe el tiempo.'}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function VariantRevealView({ ctx }: { ctx: Ctx }) {
+  const { grp, gs, me, meElim, game } = ctx
+  const variant = game.betrayal_variant
+  const name = variant ? VARIANT_NAME[variant] : 'La variante'
+  const fallen = gs.eliminations.filter((e) => e.question_pos === game.q_total).map((e) => e.player_name)
+  const winnerName = gs.members.find((m) => m.player_id === grp?.winner_player_id)?.player_name
+
+  let head: ReactNode
+  if (me?.escaped) {
+    head = (
+      <Status icon="trophy" label={name} title="¡Escapaste solo!" tone="lime">
+        <p className="font-semibold text-ink">
+          {variant === 'A' ? 'Ganaste el duelo: fuiste el más rápido.' : 'Fuiste el único traidor en pie.'} Cruzas la puerta y la sellas tras de ti.
+        </p>
+      </Status>
+    )
+  } else if (grp?.outcome === 'lone_winner') {
+    head = (
+      <Status icon="sword" label={name} title="Te traicionaron" tone="pink">
+        <p>{winnerName ?? 'Un compañero'} escapó solo y los dejó atrás.</p>
+      </Status>
+    )
+  } else if (grp?.outcome === 'wiped') {
+    head = (
+      <Status icon="skull" label={name} title="Nadie salió" tone="pink">
+        <p>La disputa terminó sin supervivientes. La codicia no paga.</p>
+      </Status>
+    )
+  } else if (grp?.outcome === 'dispute') {
+    head = (
+      <Status icon="sword" label={name} title="Siguen empatados" tone="pink">
+        <p>Todavía hay varios traidores y nadie sabe quiénes. Toca otra vuelta de votación.</p>
+      </Status>
+    )
+  } else if (meElim) {
+    head = (
+      <Status icon="skull" label={name} title="Caíste" tone="pink">
+        <p className="font-semibold text-pink">{me?.elimination_reason ?? 'La puerta te expulsó.'}</p>
+      </Status>
+    )
+  } else if (grp?.outcome === 'hard') {
+    head = (
+      <Status icon="key" label={name} title="Siguen en pie" tone="ink">
+        <p>La disputa se resolvió. Quienes quedan pasan a la ronda difícil.</p>
+        <p className="font-semibold text-ink">Empiezan de cero: pierden todas las llaves y cada error elimina a DOS.</p>
+      </Status>
+    )
+  } else {
+    head = (
+      <Status icon="bolt" label={name} title="Variante resuelta">
+        <p>Esperando el siguiente paso del profesor…</p>
+      </Status>
+    )
+  }
+
+  return (
+    <Narrow>
+      {head}
+      {variant === 'C' && gs.accusations.length > 0 && (
+        <div className="card mt-4 p-5">
+          <Label>Las acusaciones</Label>
+          <ul className="mt-3 divide-y divide-line text-sm">
+            {gs.accusations.map((a) => (
+              <li key={`${a.accuser_name}-${a.suspect_name}`} className="py-2.5">
+                <span className="font-semibold">{a.accuser_name}</span> señaló a <span className="font-semibold">{a.suspect_name}</span>
+              </li>
+            ))}
+          </ul>
+          {fallen.length > 0 && <p className="mt-3 text-xs text-ink/60">Cayeron: {fallen.join(', ')}.</p>}
+        </div>
+      )}
+      {variant !== 'C' && <VotesList votes={gs.votes} fallen={fallen} />}
+          </Narrow>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Ronda difícil                                                       */
+/* ------------------------------------------------------------------ */
+
+function TrialView({ ctx }: { ctx: Ctx }) {
+  const { grp, meElim, me, game } = ctx
+  const playing = grp?.outcome === 'hard' && !meElim && !me?.escaped
+  if (playing) return <QuestionView ctx={ctx} mode="trial" />
+  if (me?.escaped) {
+    return (
+      <Status icon="trophy" label="Ronda difícil" title="Ya escapaste" tone="lime">
+        <p>Mientras tanto, otros equipos se juegan la ronda difícil. Sírvete algo de beber.</p>
+      </Status>
+    )
+  }
+  return (
+    <Status icon="skull" label={`Ronda difícil ${game.q_index - 10} de ${game.hard_total}`} title="Miras desde fuera" tone="pink">
+      <p>{meElim ? 'Los que siguen vivos se juegan la ronda difícil sin ti.' : 'Tu equipo no participa en esta ronda.'}</p>
     </Status>
   )
 }
 
 function TrialRevealView({ ctx }: { ctx: Ctx }) {
-  const { grp, gs, game } = ctx
+  const { grp, gs, game, me, meElim, session } = ctx
   const rv = game.reveal
-  const extra = rv && (
-    <div className="rounded-3xl border border-line bg-pale p-4 text-left text-sm leading-relaxed text-ink/80">
-      <b className="text-ink">Respuesta: {LETTERS[rv.correct_index]}.</b> {rv.explanation}
-    </div>
-  )
-  if (grp?.outcome === 'escaped') {
-    return (
-      <Status icon="trophy" label="Prueba final" title="¡Escaparon!" tone="lime">
-        <p className="font-semibold text-ink">{survivors(gs).length} sobrevivientes cruzan la última puerta.</p>
-        {extra}
-      </Status>
-    )
-  }
-  if (grp?.outcome === 'reset') {
-    return (
-      <Status icon="shield" label="Prueba final" title="Nivel cero" tone="pink">
-        <p>Fallaron la prueba final: pierden todas las llaves y vuelven al principio. Así es la vida.</p>
-        {extra}
-      </Status>
-    )
-  }
+  if (!rv) return null
+  const inRound = grp?.outcome === 'hard' || grp?.outcome === 'wiped' || (grp?.outcome === 'lone_winner' && !me?.escaped)
+
+  const choice = gs.group_choice
+  const correct = choice !== null && choice === rv.correct_index
+  const thisQ = gs.eliminations.filter((e) => e.question_pos === game.q_index)
+  const iFell = thisQ.some((e) => e.player_id === session.playerId)
+  const others = thisQ.filter((e) => e.player_id !== session.playerId)
+  const left = survivors(gs).length
+
   return (
-    <Status icon="bolt" label="Prueba final" title="Prueba terminada">
-      <p>Esperando el resultado final…</p>
-      {extra}
-    </Status>
+    <Narrow>
+      <div className="mb-3 flex items-center justify-between">
+        <TeamChip color={grp?.color} />
+        <Label>Ronda difícil {game.q_index - 10} de {game.hard_total}</Label>
+      </div>
+
+      <div className="rounded-3xl bg-lime p-5 text-black md:p-6">
+        <div className="flex items-center gap-3">
+          <PixelIcon name="check" className="h-5 w-5" />
+          <span className="font-bold">Respuesta correcta: {LETTERS[rv.correct_index]}</span>
+        </div>
+        <p className="mt-2 text-sm leading-relaxed text-black/70 md:text-base">{rv.explanation}</p>
+      </div>
+
+      {inRound && (
+        <div className="mt-4 space-y-3">
+          {correct ? (
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="rounded-3xl border-2 p-5 text-center" style={{ borderColor: teamHex(grp?.color) }}>
+              <PixelIcon name="key" className="mx-auto mb-3 h-9 w-9" />
+              <p className="text-lg font-bold" style={{ color: teamHex(grp?.color) }}>¡Ganaron una llave {teamName(grp?.color)}!</p>
+              <p className="text-sm text-ink/60">Nadie cae en esta pregunta.</p>
+            </motion.div>
+          ) : (
+            <div className="rounded-3xl border border-pink/30 bg-pink/10 p-5 text-center">
+              <PixelIcon name="shield" className="mx-auto mb-3 h-9 w-9 text-pink" />
+              <p className="text-lg font-bold text-pink">{choice === null ? 'No respondieron a tiempo' : 'Fallaron la pregunta'}</p>
+              <p className="text-sm text-ink/60">La ronda difícil se cobra a DOS de ustedes.</p>
+            </div>
+          )}
+          {iFell && (
+            <motion.div initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} className="rounded-3xl border border-pink/40 bg-pink/10 p-6 text-center">
+              <PixelIcon name="skull" className="mx-auto mb-4 h-12 w-12 text-pink" />
+              <Label className="!text-ink/60">Eres de los elegidos</Label>
+              <p className="display mt-3 text-3xl text-pink">{thisQ.find((e) => e.player_id === session.playerId)?.reason}</p>
+            </motion.div>
+          )}
+          {others.map((e) => (
+            <motion.p key={e.player_id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="rounded-2xl border border-pink/30 bg-pink/10 px-4 py-3 text-center text-sm font-bold text-pink">
+              {dramatize(e.player_name, e.reason)}
+            </motion.p>
+          ))}
+          {meElim && !iFell && <p className="text-center text-xs text-ink/60">Sigues fuera de juego.</p>}
+          <div className="space-y-3 pt-2">
+            <KeyBar ctx={ctx} />
+            <p className="text-center text-xs text-ink/60">Siguen en pie: {left} de {gs.members.length}</p>
+          </div>
+        </div>
+      )}
+    </Narrow>
   )
 }
 
@@ -748,21 +1152,23 @@ function TrialRevealView({ ctx }: { ctx: Ctx }) {
 
 function FinalView({ ctx }: { ctx: Ctx }) {
   const { grp, gs, me, session, game } = ctx
-  const keys = gs.keys.length
   const outcome = grp?.outcome ?? null
+  const hardKeys = gs.keys.filter((k) => k.question_pos >= HARD_BASE).length
 
   let head: ReactNode
   if (outcome === 'escaped') {
     head = (
       <Status icon="trophy" label="Misión cumplida" title="¡Escaparon!" tone="lime">
         <p>
-          {me?.escaped ? 'Cruzaste la última puerta junto a tu equipo. Hoy sí hubo amistad.' : 'Tu equipo escapó, pero tú caíste por el camino. Un héroe caído.'}
+          {me?.escaped
+            ? 'Sobreviviste a la ronda difícil y cruzaste la última puerta junto a tu equipo. Hoy sí hubo amistad.'
+            : 'Tu equipo escapó, pero tú caíste por el camino. Un héroe caído.'}
         </p>
       </Status>
     )
-  } else if (outcome === 'lone_winner') {
+  } else if (outcome === 'lone_winner' || me?.escaped) {
     head =
-      grp?.winner_player_id === session.playerId ? (
+      grp?.winner_player_id === session.playerId || me?.escaped ? (
         <Status icon="trophy" label="Misión cumplida" title="Escapaste solo" tone="lime">
           <p>Traicionaste a tu equipo y cruzaste la puerta. Tú ganaste. Ellos lo recordarán.</p>
         </Status>
@@ -774,7 +1180,7 @@ function FinalView({ ctx }: { ctx: Ctx }) {
   } else if (outcome === 'reset') {
     head = (
       <Status icon="shield" label="Misión fallida" title="Nivel cero" tone="pink">
-        <p>Fallaron la prueba final y lo perdieron todo.</p>
+        <p>Perdieron todo.</p>
       </Status>
     )
   } else if (outcome === 'wiped') {
@@ -803,8 +1209,8 @@ function FinalView({ ctx }: { ctx: Ctx }) {
           <div className="mt-4">
             <KeyBar ctx={ctx} />
           </div>
-          <p className="mt-3 text-xs text-ink/50">
-            {outcome === 'reset' ? 'Llaves perdidas por el nivel cero' : `${keys} de ${game.q_total} llaves`} · {survivors(gs).length} de {gs.members.length} con vida
+          <p className="mt-3 text-xs text-ink/60">
+            {hardKeys} de {game.hard_total} llaves de la ronda difícil · {survivors(gs).length} de {gs.members.length} con vida
           </p>
         </div>
       )}

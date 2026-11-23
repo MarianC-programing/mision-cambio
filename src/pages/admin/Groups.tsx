@@ -9,7 +9,8 @@ export default function Groups({ admin }: { admin: Admin }) {
 
   const { game, groups, finale_votes: allVotes } = snap
   const s = game.status
-  const votesVisible = s === 'betrayal_reveal' || s === 'trial' || s === 'trial_reveal' || s === 'finished'
+  const votesVisible = s !== 'lobby' && s !== 'question' && s !== 'paused' && s !== 'reveal' && s !== 'betrayal'
+  // Los votos llegan ordenados por ronda: gana el de la última vuelta (variante B).
   const voteOf = new Map(allVotes.map((v) => [v.player_id, v]))
   const canFix = s === 'question' || s === 'paused' || s === 'reveal'
 
@@ -70,7 +71,7 @@ export default function Groups({ admin }: { admin: Admin }) {
                     </>
                   )}
                   {grp.outcome ? (
-                    <Badge tone={grp.outcome === 'escaped' || grp.outcome === 'lone_winner' ? 'lime' : grp.outcome === 'trap' ? 'blue' : 'pink'}>
+                    <Badge tone={grp.outcome === 'escaped' || grp.outcome === 'lone_winner' ? 'lime' : grp.outcome === 'hard' || grp.outcome === 'trap' ? 'blue' : 'pink'}>
                       {OUTCOME_LABEL[grp.outcome]}
                     </Badge>
                   ) : (
@@ -106,6 +107,7 @@ export default function Groups({ admin }: { admin: Admin }) {
                               <span className={`inline-flex items-center gap-1 font-bold ${v.vote === 'steal' ? 'text-pink' : 'text-lime'}`}>
                                 {v.vote === 'steal' ? <Swords className="h-3.5 w-3.5" /> : <Handshake className="h-3.5 w-3.5" />}
                                 {v.vote === 'steal' ? 'Traicionó' : v.auto ? 'No votó' : 'Cooperó'}
+                                {(v.round ?? 1) > 1 ? ` (vuelta ${v.round})` : ''}
                               </span>
                             )}
                           </td>

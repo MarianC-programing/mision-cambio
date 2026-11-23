@@ -5,19 +5,24 @@ export type GameStatus =
   | 'reveal'
   | 'betrayal'
   | 'betrayal_reveal'
+  | 'variant'
+  | 'variant_reveal'
   | 'trial'
   | 'trial_reveal'
   | 'finished'
 
 /**
- * trap        -> clasificó a la prueba final
- * escaped     -> superó la prueba final: el equipo escapó
+ * hard        -> está en la ronda difícil (o pasará a ella)
+ * dispute     -> varios traidores: espera/juega la variante sorteada
+ * escaped     -> terminó la ronda difícil con al menos un vivo: escapó
  * lone_winner -> un traidor salió solo
- * reset       -> falló la prueba final: vuelve al nivel cero
  * wiped       -> sin sobrevivientes
+ * trap, reset -> obsoletos (prueba final de una pregunta); solo por compatibilidad
  */
-export type GroupOutcome = 'trap' | 'escaped' | 'lone_winner' | 'reset' | 'wiped'
+export type GroupOutcome = 'hard' | 'dispute' | 'escaped' | 'lone_winner' | 'wiped' | 'trap' | 'reset'
 export type Vote = 'share' | 'steal'
+/** A duelo de traidores · B segunda vuelta · C acusación. */
+export type Variant = 'A' | 'B' | 'C'
 
 export interface PublicQuestion {
   index: number
@@ -38,6 +43,9 @@ export interface Game {
   status: GameStatus
   q_index: number
   q_total: number
+  hard_total: number
+  betrayal_variant: Variant | null
+  variant_round: number
   duration_ms: number
   phase_ms: number | null
   ends_at: string | null
@@ -64,6 +72,7 @@ export interface Group {
   eliminated: boolean
   outcome: GroupOutcome | null
   winner_player_id: string | null
+  traitor_count: number
   created_at: string
 }
 
@@ -101,6 +110,22 @@ export interface FinaleVote {
   player_name: string
   vote: Vote
   auto: boolean
+  round?: number
+}
+
+export interface DuelAnswer {
+  group_id: string
+  player_id: string
+  player_name: string
+  choice: number
+  is_correct: boolean
+  answered_at: string
+}
+
+export interface Accusation {
+  group_id?: string
+  accuser_name: string
+  suspect_name: string
 }
 
 /** Estado privado del equipo del jugador (my_group_state). */
@@ -116,6 +141,13 @@ export interface GroupState {
   votes_cast: number
   /** Solo viene lleno cuando el administrador ya cerró la votación. */
   votes: FinaleVote[]
+  /** Variante A: opción que elegí en el duelo (null si no participo o no respondí). */
+  my_duel_choice: number | null
+  duel_cast: number
+  /** Variante C: a quién señalé (id del sospechoso). */
+  my_accusation: string | null
+  /** Variante C: acusaciones del equipo; solo se llenan cuando la fase ya se cerró. */
+  accusations: Accusation[]
 }
 
 export interface GroupAnswer {
@@ -131,7 +163,7 @@ export interface GroupAnswer {
 export interface AdminQuestion {
   id: string
   pos: number
-  kind: 'door' | 'final'
+  kind: 'door' | 'final' | 'hard'
   model: string
   prompt: string
   options: string[]
@@ -149,6 +181,8 @@ export interface Snapshot {
   groups: AdminGroup[]
   group_answers: GroupAnswer[]
   finale_votes: FinaleVote[]
+  duel_answers: DuelAnswer[]
+  accusations: Accusation[]
   questions: AdminQuestion[]
   server_time: string
 }
