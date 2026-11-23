@@ -1,12 +1,17 @@
 import { Eye, Flag, Pause, Play, Plus, RotateCw, ShieldAlert, SkipForward, Swords, Zap } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Badge, Button, Label, TimerRing } from '../../components/ui'
-import { isTimed, OUTCOME_LABEL, phaseTotalMs, teamHex, teamName } from '../../lib/teams'
+import { isTimed, OUTCOME_LABEL, phaseTotalMs, teamHex, teamName, VARIANT_NAME } from '../../lib/teams'
+import type { Variant } from '../../lib/types'
 import { useLiveTimer } from './General'
 import { STATUS_LABEL, type Admin } from './useAdmin'
 
+/** Posición de la primera pregunta de la ronda difícil menos uno (las difíciles son 11..10+n). */
+const HARD_OFFSET = 10
+
 export default function Control({ admin }: { admin: Admin }) {
   const ms = useLiveTimer(admin)
+  const [forced, setForced] = useState<Variant | null>(null)
   const snap = admin.snap
   if (!snap) {
     return (
@@ -19,17 +24,37 @@ export default function Control({ admin }: { admin: Admin }) {
     )
   }
 
-  const { game, players, groups, group_answers: answers, finale_votes: votes } = snap
+  const { game, players, groups, group_answers: answers, finale_votes: votes, duel_answers: duels, accusations } = snap
   const s = game.status
   const b = admin.busy
   const isLastDoor = game.q_index + 1 >= game.q_total
+  const variant = game.betrayal_variant
 
+  const living = (g: (typeof groups)[number]) => g.members.filter((m) => !m.eliminated && !m.escaped)
   const alive = (g: (typeof groups)[number]) => g.members.filter((m) => !m.eliminated).length
+  const aliveIds = (gs: typeof groups) => new Set(gs.flatMap((g) => living(g).map((m) => m.player_id)))
+
   const doorAnswers = answers.filter((a) => a.question_pos === game.q_index).length
+  const hardTeams = groups.filter((g) => g.outcome === 'hard')
+  const disputeTeams = groups.filter((g) => g.outcome === 'dispute')
+
+  // Progreso de la votación original (ronda 1) entre los equipos que aún votan.
   const voting = groups.filter((g) => g.outcome === null)
-  const voters = voting.reduce((n, g) => n + alive(g), 0)
-  const voted = votes.filter((v) => voting.some((g) => g.id === v.group_id && g.members.some((m) => m.player_id === v.player_id && !m.eliminated))).length
-  const trialTeams = groups.filter((g) => g.outcome === 'trap').length
+  const voteIds = aliveIds(voting)
+  const voted = votes.filter((v) => (v.round ?? 1) === 1 && voteIds.has(v.player_id)).length
+
+  // Progreso de la variante en curso.
+  const disputeIds = aliveIds(disputeTeams)
+  const traitorIds = new Set(votes.filter((v) => (v.round ?? 1) === 1 && v.vote === 'steal' && disputeIds.has(v.player_id)).map((v) => v.player_id))
+  const variantDone =
+    variant === 'A' ? duels.filter((d) => traitorIds.has(d.player_id)).length
+    : variant === 'B' ? votes.filter((v) => v.round === game.variant_round && disputeIds.has(v.player_id)).length
+    : accusations.filter((a) => disputeTeams.some((g) => g.id === a.group_id)).length
+  const variantTotal = variant === 'A' ? traitorIds.size : disputeIds.size
+
+  const hardQ = game.q_index - HARD_OFFSET
+  const lastHard = hardQ >= game.hard_total
+  const variantName = variant ? VARIANT_NAME[variant] : ''
 
   const hint: Record<typeof s, string> = {
     lobby: !players.length
@@ -42,12 +67,25 @@ export default function Control({ admin }: { admin: Admin }) {
     reveal: isLastDoor
       ? 'Última puerta de preguntas resuelta. Sigue LA ÚLTIMA PUERTA: la traición.'
       : 'Puerta resuelta: llaves entregadas y eliminaciones hechas. Avanza cuando quieras.',
-    betrayal: `Los sobrevivientes votan en secreto · ${voted} de ${voters} han votado. Cierra la votación cuando termine el tiempo.`,
-    betrayal_reveal: trialTeams
-      ? `Traición resuelta. ${trialTeams} equipo(s) pasan a la prueba final.`
-      : 'Traición resuelta. Ningún equipo clasificó: al continuar, la partida termina.',
-    trial: 'Los equipos clasificados responden la prueba final. Ciérrala cuando terminen.',
-    trial_reveal: 'Prueba final resuelta. Muestra el resultado final.',
+    betrayal: `Los sobrevivientes votan en secreto · ${voted} de ${voteIds.size} han votado. Cierra la votación cuando termine el tiempo.`,
+    betrayal_reveal: disputeTeams.length
+      ? `Traición resuelta. ${disputeTeams.length} equipo(s) con varios traidores quedan en disputa: el sorteo eligió «${variantName}».`
+      : hardTeams.length
+        ? `Traición resuelta. ${hardTeams.length} equipo(s) empiezan de cero en la ronda difícil.`
+        : 'Traición resuelta. Ningún equipo sigue en juego: al continuar, la partida termina.',
+    variant:
+      variant === 'A' ? `Duelo de traidores · han respondido ${variantDone} de ${variantTotal}. Gana el primero en acertar.`
+      : variant === 'B' ? `Segunda vuelta (${game.variant_round}.ª votación) · ${variantDone} de ${variantTotal} han votado.`
+      : `Acusación · ${variantDone} de ${variantTotal} han señalado a un sospechoso.`,
+    variant_reveal: disputeTeams.length
+      ? `Sigue habiendo ${disputeTeams.length} equipo(s) en disputa: toca otra vuelta de votación.`
+      : hardTeams.length
+        ? `Variante resuelta. ${hardTeams.length} equipo(s) pasan a la ronda difícil.`
+        : 'Variante resuelta. Ningún equipo sigue en juego: al continuar, la partida termina.',
+    trial: `Ronda difícil · pregunta ${hardQ} de ${game.hard_total}. Cada error elimina a DOS miembros. Ciérrala cuando terminen.`,
+    trial_reveal: lastHard || !hardTeams.length
+      ? 'Ronda difícil terminada. Muestra el resultado final.'
+      : 'Pregunta difícil resuelta. Avanza a la siguiente cuando quieras.',
     finished: 'La partida terminó. Puedes crear una nueva.',
   }
 
@@ -68,18 +106,32 @@ export default function Control({ admin }: { admin: Admin }) {
         : { label: 'Siguiente puerta', icon: <SkipForward className="h-5 w-5" />, onClick: () => void admin.next(), variant: 'ink' }
       break
     case 'betrayal':
-      primary = { label: 'Cerrar votación y revelar', icon: <Eye className="h-5 w-5" />, onClick: () => void admin.resolveBetrayal(), variant: 'danger' }
+      primary = { label: 'Cerrar votación y revelar', icon: <Eye className="h-5 w-5" />, onClick: () => void admin.resolveBetrayal(forced ?? undefined), variant: 'danger' }
       break
     case 'betrayal_reveal':
-      primary = trialTeams
-        ? { label: 'Lanzar prueba final', icon: <ShieldAlert className="h-5 w-5" />, onClick: () => void admin.startTrial(), variant: 'ink' }
-        : { label: 'Terminar partida', icon: <Flag className="h-5 w-5" />, onClick: () => void admin.startTrial(), variant: 'ink' }
+      primary = disputeTeams.length
+        ? { label: `Lanzar: ${variantName}`, icon: <Swords className="h-5 w-5" />, onClick: () => void admin.startTrial(), variant: 'danger' }
+        : hardTeams.length
+          ? { label: 'Empezar la ronda difícil', icon: <ShieldAlert className="h-5 w-5" />, onClick: () => void admin.startTrial(), variant: 'ink' }
+          : { label: 'Terminar partida', icon: <Flag className="h-5 w-5" />, onClick: () => void admin.startTrial(), variant: 'ink' }
+      break
+    case 'variant':
+      primary = { label: `Cerrar «${variantName}» y revelar`, icon: <Eye className="h-5 w-5" />, onClick: () => void admin.resolveVariant(), variant: 'danger' }
+      break
+    case 'variant_reveal':
+      primary = disputeTeams.length
+        ? { label: 'Otra vuelta de votación', icon: <RotateCw className="h-5 w-5" />, onClick: () => void admin.startTrial(), variant: 'danger' }
+        : hardTeams.length
+          ? { label: 'Empezar la ronda difícil', icon: <ShieldAlert className="h-5 w-5" />, onClick: () => void admin.startTrial(), variant: 'ink' }
+          : { label: 'Terminar partida', icon: <Flag className="h-5 w-5" />, onClick: () => void admin.startTrial(), variant: 'ink' }
       break
     case 'trial':
-      primary = { label: 'Cerrar prueba final', icon: <Eye className="h-5 w-5" />, onClick: () => void admin.resolveTrial(), variant: 'lime' }
+      primary = { label: 'Cerrar pregunta difícil', icon: <Eye className="h-5 w-5" />, onClick: () => void admin.resolveTrial(), variant: 'lime' }
       break
     case 'trial_reveal':
-      primary = { label: 'Ver resultado final', icon: <Flag className="h-5 w-5" />, onClick: () => void admin.next(), variant: 'ink' }
+      primary = lastHard || !hardTeams.length
+        ? { label: 'Ver resultado final', icon: <Flag className="h-5 w-5" />, onClick: () => void admin.next(), variant: 'ink' }
+        : { label: 'Siguiente pregunta difícil', icon: <SkipForward className="h-5 w-5" />, onClick: () => void admin.next(), variant: 'ink' }
       break
     case 'finished':
       primary = { label: 'Nueva partida', icon: <Plus className="h-5 w-5" />, onClick: () => void admin.createGame() }
@@ -89,7 +141,8 @@ export default function Control({ admin }: { admin: Admin }) {
   const doorLabel =
     s === 'lobby' ? 'Sala'
     : s === 'betrayal' || s === 'betrayal_reveal' ? 'La última puerta'
-    : s === 'trial' || s === 'trial_reveal' ? 'Prueba final'
+    : s === 'variant' || s === 'variant_reveal' ? variantName || 'Variante'
+    : s === 'trial' || s === 'trial_reveal' ? `Ronda difícil ${Math.max(hardQ, 1)}/${game.hard_total}`
     : s === 'finished' ? 'Fin'
     : `Puerta ${game.q_index + 1} de ${game.q_total}`
 
@@ -110,6 +163,27 @@ export default function Control({ admin }: { admin: Admin }) {
             >
               {primary.icon} {primary.label}
             </Button>
+          )}
+          {s === 'betrayal' && (
+            <div className="rounded-2xl border border-line bg-pale p-4 sm:col-span-2">
+              <Label>Si hay varios traidores en un equipo</Label>
+              <p className="mt-1 text-xs text-ink/60">Por defecto el servidor sortea una variante para toda la partida. Puedes forzar una.</p>
+              <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Variante de la traición">
+                {([null, 'A', 'B', 'C'] as const).map((v) => (
+                  <button
+                    key={v ?? 'random'}
+                    type="button"
+                    aria-pressed={forced === v}
+                    onClick={() => setForced(v)}
+                    className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                      forced === v ? 'border-lime bg-lime/10 text-lime' : 'border-line text-ink/70 hover:border-white/30'
+                    }`}
+                  >
+                    {v ? `${v} · ${VARIANT_NAME[v]}` : 'Sorteo automático'}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
           {s === 'lobby' && groups.length > 0 && (
             <Button size="lg" variant="quiet" onClick={() => void admin.formGroups()} disabled={b}>
@@ -172,18 +246,22 @@ export default function Control({ admin }: { admin: Admin }) {
               <span className="h-4 w-4 shrink-0 rounded-full" style={{ backgroundColor: teamHex(g.color) }} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold">{teamName(g.color)}</p>
-                <p className="text-xs text-ink/50">
+                <p className="text-xs text-ink/60">
                   {alive(g)}/{g.members.length} vivos · {g.key_count} llave{g.key_count === 1 ? '' : 's'}
                 </p>
               </div>
-              {g.outcome && <Badge tone={g.outcome === 'escaped' || g.outcome === 'lone_winner' ? 'lime' : g.outcome === 'trap' ? 'blue' : 'pink'}>{OUTCOME_LABEL[g.outcome]}</Badge>}
+              {g.outcome && (
+                <Badge tone={g.outcome === 'escaped' || g.outcome === 'lone_winner' ? 'lime' : g.outcome === 'hard' || g.outcome === 'trap' ? 'blue' : 'pink'}>
+                  {OUTCOME_LABEL[g.outcome]}
+                </Badge>
+              )}
             </div>
           ))}
           {groups.length === 0 && <p className="text-sm text-ink/60">Aún no hay equipos.</p>}
         </div>
 
         <p className="mt-5 text-xs text-ink/60">
-          Cada puerta dura {game.duration_ms / 1000} s. Al revelar: acierto = llave, fallo = cae un miembro al azar.
+          Cada puerta dura {game.duration_ms / 1000} s. Al revelar: acierto = llave, fallo = cae un miembro al azar. En la ronda difícil caen dos.
         </p>
       </aside>
     </div>

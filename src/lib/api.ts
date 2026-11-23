@@ -6,6 +6,7 @@ import type {
   Player,
   Session,
   Snapshot,
+  Variant,
   Vote,
 } from './types'
 
@@ -27,8 +28,10 @@ const MESSAGES: Record<string, string> = {
   question_live: 'No puedes editar la pregunta que está en juego.',
   not_in_group_or_eliminated: 'No perteneces a un equipo activo o ya fuiste eliminado.',
   group_already_answered: 'Tu equipo ya respondió esta puerta.',
-  not_in_trial: 'Tu equipo no está en la prueba final.',
-  vote_not_needed: 'Tu equipo no necesita votar.',
+  not_in_trial: 'Tu equipo no está en la ronda difícil.',
+  not_in_duel: 'No participas en el duelo de traidores.',
+  already_answered: 'Ya respondiste.',
+  vote_not_needed: 'Tu equipo no necesita votar ahora.',
   question_not_found: 'Pregunta no encontrada.',
   group_not_found: 'Equipo no encontrado.',
 }
@@ -73,6 +76,14 @@ export const submitGroupAnswer = (s: Session, pos: number, choice: number): Prom
 export const submitVote = (s: Session, vote: Vote): Promise<{ ok: boolean }> =>
   rpc('submit_vote', { p_player: s.playerId, p_token: s.token, p_vote: vote })
 
+/** Variante A (duelo de traidores): respuesta de velocidad individual. */
+export const submitDuelAnswer = (s: Session, pos: number, choice: number): Promise<{ ok: boolean }> =>
+  rpc('submit_duel_answer', { p_player: s.playerId, p_token: s.token, p_pos: pos, p_choice: choice })
+
+/** Variante C (acusación): señala a un compañero. Se puede cambiar hasta que se acabe el tiempo. */
+export const submitAccusation = (s: Session, suspect: string): Promise<{ ok: boolean }> =>
+  rpc('submit_accusation', { p_player: s.playerId, p_token: s.token, p_suspect: suspect })
+
 export async function fetchGame(gameId: string): Promise<Game | null> {
   const { data } = await supabase.from('games').select('*').eq('id', gameId).maybeSingle()
   return (data as Game | null) ?? null
@@ -95,8 +106,11 @@ export const adminPause = (pin: string, game: string) => rpc<Game>('admin_pause'
 export const adminResume = (pin: string, game: string) => rpc<Game>('admin_resume', { p_pin: pin, p_game: game })
 export const adminReveal = (pin: string, game: string) => rpc<Game>('admin_reveal', { p_pin: pin, p_game: game })
 export const adminNext = (pin: string, game: string) => rpc<Game>('admin_next', { p_pin: pin, p_game: game })
-export const adminResolveBetrayal = (pin: string, game: string) =>
-  rpc<Game>('admin_resolve_betrayal', { p_pin: pin, p_game: game })
+/** Sin `variant`, el servidor sortea la variante (A, B o C) si hay equipos en disputa. */
+export const adminResolveBetrayal = (pin: string, game: string, variant?: Variant) =>
+  rpc<Game>('admin_resolve_betrayal', { p_pin: pin, p_game: game, p_variant: variant ?? null })
+export const adminResolveVariant = (pin: string, game: string) =>
+  rpc<Game>('admin_resolve_variant', { p_pin: pin, p_game: game })
 export const adminStartTrial = (pin: string, game: string) => rpc<Game>('admin_start_trial', { p_pin: pin, p_game: game })
 export const adminResolveTrial = (pin: string, game: string) =>
   rpc<Game>('admin_resolve_trial', { p_pin: pin, p_game: game })

@@ -17,8 +17,11 @@ Entra a **[/admin](https://mision-cambio.vercel.app/admin)**, escribe la clave d
 
 1. Los participantes entran con el QR o el código y se reparten al azar en 4 equipos.
 2. **10 puertas**: una pregunta fácil por puerta. El primero que responde fija la respuesta de todo el equipo. Acertar da una llave; fallar elimina a un compañero al azar.
-3. **Última puerta**: cada sobreviviente vota en secreto *salimos todos* o *salgo yo solo*. Un único traidor escapa solo; si nadie traiciona, hay prueba final; si traicionan dos o más, se anulan.
-4. **Prueba final**: una pregunta. Acertar es escapar; fallar manda al equipo al nivel cero.
+3. **Última puerta**: cada sobreviviente vota en secreto *salgo yo solo* o *salvarnos todos juntos*.
+   - Si traiciona **uno solo**, escapa y gana; los demás caen.
+   - Si **nadie** traiciona, el equipo empieza de cero (pierde todas las llaves) y pasa a la **ronda difícil**.
+   - Si traicionan **dos o más**, el servidor sortea una variante para la partida: **duelo de traidores** (pregunta de velocidad, el primero en acertar escapa solo), **segunda vuelta** (se revela cuántos traicionaron y se vota otra vez) o **acusación** (cada uno señala a quien cree traidor). Los que cooperaron pasan a la ronda difícil.
+4. **Ronda difícil**: 5 preguntas mucho más difíciles. Cada error o falta de respuesta elimina a **dos** miembros al azar. El equipo que termina con al menos un vivo escapa.
 
 ## Stack
 

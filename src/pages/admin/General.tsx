@@ -3,12 +3,12 @@ import { QRCodeSVG } from 'qrcode.react'
 import { Badge, Button, Label, TimerRing } from '../../components/ui'
 import { useCountdown, useServerOffset } from '../../lib/clock'
 import { joinLink } from '../../lib/links'
-import { isTimed, phaseTotalMs } from '../../lib/teams'
+import { isTimed, phaseTotalMs, VARIANT_NAME } from '../../lib/teams'
 import { STATUS_LABEL, type Admin } from './useAdmin'
 
 const LETTERS = ['A', 'B', 'C', 'D']
 
-/** Milisegundos restantes de la fase en curso (puerta, votación o prueba final). */
+/** Milisegundos restantes de la fase en curso (puerta, votación, variante o ronda difícil). */
 export function useLiveTimer(admin: Admin) {
   const offset = useServerOffset()
   const g = admin.snap?.game
@@ -38,7 +38,7 @@ export default function General({ admin }: { admin: Admin }) {
     )
   }
 
-  const { game, players, group_answers: groupAnswers, groups, questions, finale_votes: votes } = snap
+  const { game, players, group_answers: groupAnswers, groups, questions, finale_votes: votes, duel_answers: duels, accusations } = snap
   const s = game.status
   const joinUrl = joinLink()
   const q = questions.find((x) => x.pos === game.q_index)
@@ -46,22 +46,37 @@ export default function General({ admin }: { admin: Admin }) {
 
   const inDoor = s === 'question' || s === 'paused' || s === 'reveal'
   const inTrial = s === 'trial' || s === 'trial_reveal'
-  const showQuestion = (inDoor || inTrial) && q
-  const revealed = s === 'reveal' || s === 'trial_reveal'
+  const inVariant = s === 'variant' || s === 'variant_reveal'
+  const variant = game.betrayal_variant
+  const duelQ = inVariant && variant === 'A'
+  const showQuestion = (inDoor || inTrial || duelQ) && q
+  const revealed = s === 'reveal' || s === 'trial_reveal' || (duelQ && s === 'variant_reveal')
   const answering = s === 'question' || s === 'paused' || s === 'trial'
 
   const expected = inTrial
-    ? groups.filter((g) => g.outcome === 'trap').length
+    ? groups.filter((g) => g.outcome === 'hard').length
     : groups.filter((g) => !g.eliminated && g.outcome === null).length
   const answered = groupAnswers.filter((a) => a.question_pos === game.q_index).length
 
   const voting = groups.filter((g) => g.outcome === null)
   const voters = voting.reduce((n, g) => n + g.members.filter((m) => !m.eliminated).length, 0)
 
+  // Progreso de la variante en curso (solo los equipos en disputa).
+  const dispute = groups.filter((g) => g.outcome === 'dispute')
+  const disputeIds = new Set(dispute.flatMap((g) => g.members.filter((m) => !m.eliminated && !m.escaped).map((m) => m.player_id)))
+  const traitorIds = new Set(votes.filter((v) => (v.round ?? 1) === 1 && v.vote === 'steal' && disputeIds.has(v.player_id)).map((v) => v.player_id))
+  const variantDone =
+    variant === 'A' ? duels.filter((d) => traitorIds.has(d.player_id)).length
+    : variant === 'B' ? votes.filter((v) => v.round === game.variant_round && disputeIds.has(v.player_id)).length
+    : accusations.filter((a) => dispute.some((g) => g.id === a.group_id)).length
+  const variantTotal = variant === 'A' ? traitorIds.size : disputeIds.size
+  const hardIndex = Math.max(game.q_index - 10, 1)
+
   const title =
     s === 'lobby' ? 'Puerta actual'
     : s === 'betrayal' || s === 'betrayal_reveal' ? 'La última puerta'
-    : inTrial ? 'Prueba final'
+    : inVariant ? `Variante: ${variant ? VARIANT_NAME[variant] : '—'}`
+    : inTrial ? `Ronda difícil ${hardIndex} de ${game.hard_total}`
     : s === 'finished' ? 'Partida terminada'
     : `Puerta ${game.q_index + 1} de ${game.q_total}`
 
@@ -113,14 +128,18 @@ export default function General({ admin }: { admin: Admin }) {
                 <p className="display mt-3 text-3xl leading-[1.05]">Los sobrevivientes votan: ¿salimos todos o salgo yo solo?</p>
               ) : s === 'betrayal_reveal' ? (
                 <p className="display mt-3 text-3xl leading-[1.05]">Mira el resultado de cada equipo en «Grupos».</p>
+              ) : inVariant && variant === 'B' ? (
+                <p className="display mt-3 text-3xl leading-[1.05]">Segunda vuelta: se revela cuántos traicionaron, no quiénes. Todos votan otra vez.</p>
+              ) : inVariant && variant === 'C' ? (
+                <p className="display mt-3 text-3xl leading-[1.05]">Acusación: cada sobreviviente señala a quien cree que traicionó.</p>
               ) : (
                 <p className="display mt-3 text-3xl text-ink/60">{s === 'finished' ? 'Revisa el resultado en «Ranking»' : 'Aún no ha comenzado'}</p>
               )}
             </div>
-            {(answering || s === 'betrayal') && (
+            {(answering || s === 'betrayal' || s === 'variant') && (
               <div className="text-center">
                 <TimerRing ms={ms} totalMs={phaseTotalMs(game)} size={128} paused={s === 'paused'} />
-                <Label className="mt-2 block">{s === 'betrayal' ? 'Tiempo para votar' : 'Tiempo para escapar'}</Label>
+                <Label className="mt-2 block">{s === 'betrayal' || s === 'variant' ? 'Tiempo de la fase' : 'Tiempo para escapar'}</Label>
               </div>
             )}
           </div>
@@ -147,6 +166,14 @@ export default function General({ admin }: { admin: Admin }) {
 
           {answering && showQuestion && (
             <Progress label="Equipos que respondieron" value={answered} total={expected} note="La opción con fondo verde claro es la correcta (solo tú la ves)." />
+          )}
+          {s === 'variant' && (
+            <Progress
+              label={variant === 'A' ? 'Traidores que respondieron' : variant === 'B' ? 'Votos de esta vuelta' : 'Acusaciones emitidas'}
+              value={variantDone}
+              total={variantTotal}
+              note="Todo es secreto hasta que cierres la variante."
+            />
           )}
           {s === 'betrayal' && (
             <Progress label="Votos emitidos" value={votes.filter((v) => voting.some((g) => g.id === v.group_id)).length} total={voters} note="Los votos son secretos hasta que cierres la votación." />

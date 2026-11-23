@@ -22,18 +22,26 @@ export const teamHex = (color?: string | null) => (color ? (TEAM_HEX[color] ?? '
 export const teamName = (color?: string | null) => (color ? (TEAM_NAME[color] ?? color) : '—')
 
 /** Fases que tienen un reloj corriendo. */
-export const isTimed = (s: GameStatus) => s === 'question' || s === 'trial' || s === 'betrayal'
+export const isTimed = (s: GameStatus) => s === 'question' || s === 'trial' || s === 'betrayal' || s === 'variant'
 
 /** Duración total de la fase en curso (para dibujar el anillo del reloj). */
 export const phaseTotalMs = (g: Pick<Game, 'phase_ms' | 'duration_ms'>) => g.phase_ms ?? g.duration_ms
 
 export const OUTCOME_LABEL: Record<GroupOutcome, string> = {
-  trap: 'En la prueba final',
+  hard: 'En la ronda difícil',
+  dispute: 'En disputa',
   escaped: 'Escapó',
   lone_winner: 'Un traidor escapó solo',
-  reset: 'Nivel cero',
   wiped: 'Aniquilado',
+  trap: 'En la ronda difícil',
+  reset: 'Nivel cero',
 }
+
+export const VARIANT_NAME = {
+  A: 'Duelo de traidores',
+  B: 'Segunda vuelta',
+  C: 'Acusación',
+} as const
 
 /** Mensaje dramático para los compañeros, en tercera persona. La víctima ve el texto original. */
 const THIRD_PERSON: Array<[RegExp, (n: string) => string]> = [
@@ -43,6 +51,18 @@ const THIRD_PERSON: Array<[RegExp, (n: string) => string]> = [
   [/gas tóxico/i, (n) => `El gas tóxico alcanzó a ${n}.`],
   [/corriente eléctrica/i, (n) => `La corriente eléctrica noqueó a ${n}.`],
   [/pozo/i, (n) => `El pozo sin fondo se tragó a ${n}.`],
+  [/techo/i, (n) => `El techo se vino abajo sobre ${n}.`],
+  [/niebla/i, (n) => `La niebla ácida devoró a ${n}.`],
+  [/suelo se abri/i, (n) => `El suelo se abrió bajo los pies de ${n}.`],
+  [/cuchilla/i, (n) => `Una cuchilla alcanzó a ${n} en la oscuridad.`],
+  [/silencio/i, (n) => `El silencio de la sala venció a ${n}.`],
+  [/reja/i, (n) => `La reja se cerró de golpe sobre ${n}.`],
+  [/cobró doble|dos víctimas|onda expansiva/i, (n) => `${n} cayó arrastrado por el error de su equipo.`],
+  [/traicionado/i, (n) => `${n} fue traicionado y quedó atrás.`],
+  [/anularon/i, (n) => `${n} cayó: los traidores se anularon entre sí.`],
+  [/duelo/i, (n) => `${n} perdió el duelo de traidores.`],
+  [/señalaron/i, (n) => `${n} fue señalado y expulsado por la puerta.`],
+  [/acusaste/i, (n) => `${n} acusó a un inocente y fue castigado.`],
 ]
 
 export function dramatize(name: string, reason: string): string {

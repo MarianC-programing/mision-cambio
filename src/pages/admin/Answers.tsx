@@ -68,7 +68,7 @@ export default function Answers({ admin }: { admin: Admin }) {
                     <span className="mr-2 inline-block h-3 w-3 rounded-full align-middle" style={{ backgroundColor: teamHex(color) }} />
                     {teamName(color)}
                   </td>
-                  <td className="px-3 py-3 tabular-nums">{q?.kind === 'final' ? 'Final' : `#${a.question_pos + 1}`}</td>
+                  <td className="px-3 py-3 tabular-nums">{q?.kind === 'hard' ? `Difícil ${a.question_pos - 10}` : `#${a.question_pos + 1}`}</td>
                   <td className="px-3 py-3">{q?.model ?? '—'}</td>
                   <td className="px-3 py-3">{a.answered_by_name}</td>
                   <td className="max-w-56 px-3 py-3">

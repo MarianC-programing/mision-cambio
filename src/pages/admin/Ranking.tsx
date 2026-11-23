@@ -4,7 +4,7 @@ import { OUTCOME_LABEL, teamHex, teamName } from '../../lib/teams'
 import type { AdminGroup, GroupOutcome } from '../../lib/types'
 import type { Admin } from './useAdmin'
 
-const PRIORITY: Record<GroupOutcome | 'none', number> = { escaped: 0, lone_winner: 1, trap: 2, none: 2, reset: 3, wiped: 4 }
+const PRIORITY: Record<GroupOutcome | 'none', number> = { escaped: 0, lone_winner: 1, hard: 2, trap: 2, dispute: 2, none: 2, reset: 3, wiped: 4 }
 const alive = (g: AdminGroup) => g.members.filter((m) => !m.eliminated).length
 
 export default function Ranking({ admin }: { admin: Admin }) {
@@ -49,7 +49,7 @@ export default function Ranking({ admin }: { admin: Admin }) {
           </div>
         )}
         <p className="mt-6 text-xs text-ink/60">
-          Escapan los equipos que superan la prueba final y el único traidor de un equipo, si hubo uno.
+          Escapan los equipos que sobreviven a la ronda difícil y el único traidor de un equipo, si hubo uno. Empatan por llaves y luego por miembros con vida.
         </p>
       </section>
 
@@ -71,7 +71,7 @@ export default function Ranking({ admin }: { admin: Admin }) {
               <span className="flex items-center gap-1 text-sm font-bold tabular-nums">
                 <Key className="h-4 w-4 text-ink/60" /> {g.key_count}
               </span>
-              <Badge tone={g.outcome === 'escaped' || g.outcome === 'lone_winner' ? 'lime' : g.outcome === 'trap' ? 'blue' : g.outcome ? 'pink' : 'pale'}>
+              <Badge tone={g.outcome === 'escaped' || g.outcome === 'lone_winner' ? 'lime' : g.outcome === 'hard' || g.outcome === 'trap' ? 'blue' : g.outcome ? 'pink' : 'pale'}>
                 {g.outcome ? OUTCOME_LABEL[g.outcome] : 'En juego'}
               </Badge>
             </li>

@@ -174,7 +174,7 @@ const TICKER = [
   '10 puertas · 25 segundos cada una',
   'Solo uno sale… o todos',
   'El primero que responde decide por todos',
-  'Nivel cero: pierdes todas las llaves',
+  'Cooperar sale caro: empiezas de cero',
   'No mires el celular del vecino',
 ]
 
@@ -290,7 +290,7 @@ const CAPS = [
   {
     id: 'traicion',
     tab: 'Traición',
-    text: 'La última puerta se decide con un voto secreto: «salimos todos» o «salgo yo solo». Si nadie traiciona, el equipo pasa unido. Si traiciona uno solo, escapa y deja atrás a los demás. Si traicionan dos o más, se anulan entre sí.',
+    text: 'La última puerta se decide con un voto secreto: «salgo yo solo» o «salvarnos todos juntos». Si traiciona uno solo, escapa y deja atrás a los demás. Si nadie traiciona, el equipo empieza de cero: pierde las llaves y enfrenta una ronda de preguntas mucho más difíciles, donde cada error elimina a dos. Si traicionan dos o más, un sorteo decide cómo se resuelve la disputa: duelo de traidores, segunda vuelta o acusación.',
     cta: 'Entrar y comprobarlo',
     href: '/unirse',
   },
@@ -438,21 +438,21 @@ function PlayerSlide() {
       <Phone className="mt-12 hidden rotate-2 sm:block">
         <p className="label text-[8px]">La última puerta</p>
         <p className="pixel mt-3 text-[13px] leading-snug">
-          Solo una puerta. <span className="text-ink/60">¿Confías en ellos?</span>
+          Solo una puerta. <span className="text-ink/60">Lo lógico es cruzarla.</span>
         </p>
         <div className="mt-5 space-y-2.5">
           <div className="flex items-center gap-3 rounded-2xl border-2 border-lime bg-lime/10 p-3.5">
-            <Logo className="h-7 w-7" />
-            <span>
-              <span className="block text-sm font-extrabold">Salimos todos</span>
-              <span className="text-[11px] text-ink/55">Cooperar con el equipo.</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-3 rounded-2xl border-2 border-line bg-pale p-3.5">
             <PixelIcon name="sword" className="h-7 w-7 text-pink" />
             <span>
               <span className="block text-sm font-extrabold">Salgo yo solo</span>
-              <span className="text-[11px] text-ink/55">Traicionar y cruzar la puerta.</span>
+              <span className="text-[11px] text-ink/60">La salida obvia. Si eres el único, ganas.</span>
+            </span>
+          </div>
+          <div className="flex items-center gap-3 rounded-2xl border-2 border-line bg-pale p-3.5">
+            <Logo className="h-7 w-7" />
+            <span>
+              <span className="block text-sm font-extrabold">Salvarnos todos juntos</span>
+              <span className="text-[11px] text-ink/60">Empiezan de cero y pierden las llaves.</span>
             </span>
           </div>
         </div>

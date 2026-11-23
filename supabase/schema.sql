@@ -12,13 +12,20 @@
 --      responden: un miembro al azar queda eliminado.
 --   3. LA ÚLTIMA PUERTA (traición). Cada sobreviviente vota en secreto:
 --        "share" = salimos todos   ·   "steal" = salgo yo solo
---        - Nadie traiciona        -> la puerta se sella: PRUEBA FINAL.
+--        - Nadie traiciona        -> la puerta se sella: empiezan de CERO (pierden
+--                                    todas las llaves) y juegan la RONDA DIFÍCIL.
 --        - Traiciona UNO solo     -> sale ya y gana; el resto queda eliminado.
---        - Traicionan DOS o más   -> los traidores se anulan y caen; los que
---                                    cooperaron pasan a la PRUEBA FINAL.
---        - Un único sobreviviente -> pasa directo a la PRUEBA FINAL.
---   4. PRUEBA FINAL (1 pregunta). Acertar = escapan. Fallar o no responder =
---      el equipo vuelve al nivel cero (pierde todas sus llaves).
+--        - Traicionan DOS o más   -> el servidor sortea UNA variante por partida y
+--                                    la aplica a todos los equipos en disputa:
+--                                      A duelo de traidores (pregunta de velocidad)
+--                                      B segunda vuelta (se revela cuántos, no quiénes)
+--                                      C acusación (cada uno señala a un sospechoso)
+--                                    Quienes cooperaron pasan a la RONDA DIFÍCIL.
+--        - Un único sobreviviente -> pasa directo a la RONDA DIFÍCIL.
+--   4. RONDA DIFÍCIL (preguntas kind='hard', posiciones 11 en adelante, 25 s).
+--      Cada acierto da una llave; cada error o silencio elimina a DOS miembros
+--      al azar (o a uno si solo queda uno). El equipo que termina con al menos
+--      un miembro vivo escapa.
 --
 -- Modelo de seguridad
 --   * El navegador solo usa la clave pública (anon). Ninguna tabla sensible
@@ -48,11 +55,12 @@ create table if not exists public.app_config (
 );
 
 -- kind = 'door'  -> una de las puertas normales (posiciones 0..n-1, contiguas)
--- kind = 'final' -> la pregunta de la prueba final (una sola)
+-- kind = 'final' -> pregunta de velocidad del duelo de traidores (una sola, pos 10)
+-- kind = 'hard'  -> preguntas de la ronda difícil (posiciones 11..10+n, contiguas)
 create table if not exists public.questions (
   id            uuid primary key default gen_random_uuid(),
   pos           int  not null unique check (pos between 0 and 19),
-  kind          text not null default 'door' check (kind in ('door','final')),
+  kind          text not null default 'door' check (kind in ('door','final','hard')),
   model         text not null,
   prompt        text not null,
   options       jsonb not null,
@@ -68,9 +76,13 @@ create table if not exists public.games (
   code                text not null unique,
   status              text not null default 'lobby'
                       check (status in ('lobby','question','paused','reveal',
-                                        'betrayal','betrayal_reveal','trial','trial_reveal','finished')),
+                                        'betrayal','betrayal_reveal','variant','variant_reveal',
+                                        'trial','trial_reveal','finished')),
   q_index             int  not null default -1,
   q_total             int  not null,
+  hard_total          int  not null default 5,   -- preguntas de la ronda difícil
+  betrayal_variant    text check (betrayal_variant is null or betrayal_variant in ('A','B','C')),
+  variant_round       int  not null default 1,   -- ronda de voto en curso (B suma rondas)
   duration_ms         int  not null default 25000,
   phase_ms            int,                       -- duración total de la fase con reloj en curso
   ends_at             timestamptz,
@@ -86,18 +98,20 @@ create table if not exists public.games (
 -- ---------------------------------------------------------------------
 
 -- outcome: null mientras juegan las puertas / vota la traición.
---   trap        -> clasificó a la prueba final
---   escaped     -> superó la prueba final: el equipo escapó
+--   hard        -> está en la ronda difícil (o pasará a ella)
+--   dispute     -> varios traidores: espera/juega la variante sorteada
+--   escaped     -> terminó la ronda difícil con al menos un vivo: escapó
 --   lone_winner -> un traidor salió solo (winner_player_id)
---   reset       -> falló la prueba final: vuelve al nivel cero
 --   wiped       -> sin sobrevivientes
+--   trap, reset -> obsoletos (prueba final de una pregunta); solo por compatibilidad
 create table if not exists public.groups (
   id            uuid primary key default gen_random_uuid(),
   game_id       uuid not null references public.games(id) on delete cascade,
   color         text not null check (color in ('red','blue','green','yellow','purple','orange')),
   key_count     int  not null default 0,
   eliminated    boolean not null default false,
-  outcome       text check (outcome in ('trap','escaped','lone_winner','reset','wiped')),
+  outcome       text check (outcome in ('trap','escaped','lone_winner','reset','wiped','hard','dispute')),
+  traitor_count int  not null default 0,   -- cuántos traicionaron (se revela en disputa)
   created_at    timestamptz not null default now()
 );
 
@@ -185,14 +199,38 @@ create table if not exists public.eliminations (
 
 -- Votos secretos de la última puerta. vote: share = salimos todos · steal = salgo yo solo.
 -- auto = true cuando el jugador no votó a tiempo (cuenta como "share").
+-- round: 1 es la votación original; la variante B añade las rondas 2 y 3.
 create table if not exists public.finale_votes (
   id         uuid primary key default gen_random_uuid(),
   group_id   uuid not null references public.groups(id) on delete cascade,
   player_id  uuid not null references public.players(id) on delete cascade,
   vote       text not null check (vote in ('share','steal')),
   auto       boolean not null default false,
+  round      int  not null default 1,
   voted_at   timestamptz not null default now(),
+  constraint finale_votes_player_round_key unique (player_id, round)
+);
+
+-- Variante A (duelo de traidores): respuesta de velocidad de cada traidor.
+create table if not exists public.duel_answers (
+  id          uuid primary key default gen_random_uuid(),
+  group_id    uuid not null references public.groups(id) on delete cascade,
+  player_id   uuid not null references public.players(id) on delete cascade,
+  choice      int  not null check (choice between 0 and 3),
+  is_correct  boolean not null,
+  answered_at timestamptz not null default clock_timestamp(),
   unique (player_id)
+);
+
+-- Variante C (acusación): a quién señala cada sobreviviente.
+create table if not exists public.accusations (
+  id          uuid primary key default gen_random_uuid(),
+  group_id    uuid not null references public.groups(id) on delete cascade,
+  accuser_id  uuid not null references public.players(id) on delete cascade,
+  suspect_id  uuid not null references public.players(id) on delete cascade,
+  accused_at  timestamptz not null default clock_timestamp(),
+  unique (accuser_id),
+  check (accuser_id <> suspect_id)
 );
 
 -- ---------------------------------------------------------------------
@@ -219,15 +257,30 @@ alter table public.eliminations add  constraint eliminations_player_id_fkey
 alter table public.questions drop constraint if exists questions_pos_check;
 alter table public.questions add  constraint questions_pos_check check (pos between 0 and 19);
 alter table public.questions drop constraint if exists questions_kind_check;
-alter table public.questions add  constraint questions_kind_check check (kind in ('door','final'));
+alter table public.questions add  constraint questions_kind_check check (kind in ('door','final','hard'));
 
 alter table public.games drop constraint if exists games_status_check;
 alter table public.games add  constraint games_status_check
-  check (status in ('lobby','question','paused','reveal','betrayal','betrayal_reveal','trial','trial_reveal','finished'));
+  check (status in ('lobby','question','paused','reveal','betrayal','betrayal_reveal','variant','variant_reveal',
+                    'trial','trial_reveal','finished'));
 
 alter table public.groups drop constraint if exists groups_outcome_check;
 alter table public.groups add  constraint groups_outcome_check
-  check (outcome in ('trap','escaped','lone_winner','reset','wiped'));
+  check (outcome in ('trap','escaped','lone_winner','reset','wiped','hard','dispute'));
+
+-- Ronda difícil y variantes de la traición (instalaciones anteriores).
+alter table public.games  add column if not exists hard_total int not null default 5;
+alter table public.games  add column if not exists betrayal_variant text;
+alter table public.games  add column if not exists variant_round int not null default 1;
+alter table public.games drop constraint if exists games_variant_check;
+alter table public.games add  constraint games_variant_check
+  check (betrayal_variant is null or betrayal_variant in ('A','B','C'));
+alter table public.groups add column if not exists traitor_count int not null default 0;
+-- El voto pasa a ser único por jugador Y ronda (la variante B repite la votación).
+alter table public.finale_votes add column if not exists round int not null default 1;
+alter table public.finale_votes drop constraint if exists finale_votes_player_id_key;
+alter table public.finale_votes drop constraint if exists finale_votes_player_round_key;
+alter table public.finale_votes add  constraint finale_votes_player_round_key unique (player_id, round);
 
 alter table public.group_answers drop constraint if exists group_answers_question_pos_check;
 alter table public.group_answers add  constraint group_answers_question_pos_check check (question_pos between 0 and 19);
@@ -252,6 +305,8 @@ alter table public.group_answers      enable row level security;
 alter table public.group_keys         enable row level security;
 alter table public.eliminations       enable row level security;
 alter table public.finale_votes       enable row level security;
+alter table public.duel_answers       enable row level security;
+alter table public.accusations        enable row level security;
 
 -- Lectura pública SOLO de partidas y jugadores (no contienen secretos ni respuestas correctas).
 -- El estado privado de cada equipo se lee con la función my_group_state (valida el token).
@@ -265,7 +320,8 @@ create policy players_public_read   on public.players     for select to anon, au
 -- Con RLS activo y sin políticas, nadie puede leer ni escribir esas tablas desde la API.
 -- Se refuerza quitando también los privilegios de tabla.
 revoke all on public.app_config, public.questions, public.player_secrets, public.answers,
-            public.group_answers, public.group_keys, public.eliminations, public.finale_votes
+            public.group_answers, public.group_keys, public.eliminations, public.finale_votes,
+            public.duel_answers, public.accusations
   from anon, authenticated;
 revoke all on public.games, public.players, public.groups, public.group_members from anon, authenticated;
 grant select on public.games, public.players to anon, authenticated;
@@ -348,8 +404,8 @@ returns void
 language plpgsql security definer set search_path = public, extensions, pg_temp
 as $$
 begin
-  -- Un solo sobreviviente: no hay a quién traicionar, pasa directo a la prueba final.
-  update public.groups gr set outcome = 'trap'
+  -- Un solo sobreviviente: no hay a quién traicionar, pasa directo a la ronda difícil.
+  update public.groups gr set outcome = 'hard'
   where gr.game_id = p_game and gr.outcome is null
     and (select count(*) from public.group_members m
          where m.group_id = gr.id and not m.eliminated) = 1;
@@ -362,11 +418,53 @@ begin
     status = 'betrayal',
     current_question = null,
     reveal = null,
+    betrayal_variant = null,
+    variant_round = 1,
     paused_remaining_ms = null,
     phase_ms = 45000,
     ends_at = clock_timestamp() + interval '45 seconds',
     updated_at = clock_timestamp()
   where id = p_game;
+end $$;
+
+-- Abre la fase de la variante sorteada para los equipos en disputa.
+--   A: duelo de traidores (pregunta de velocidad, 25 s)
+--   B: segunda vuelta (suma una ronda de voto, 30 s)
+--   C: acusación (45 s)
+create or replace function public._open_variant(p_game uuid)
+returns void
+language plpgsql security definer set search_path = public, extensions, pg_temp
+as $$
+declare g public.games; q public.questions;
+begin
+  select * into g from public.games where id = p_game;
+  if g.betrayal_variant = 'A' then
+    select * into q from public.questions where kind = 'final';
+    if not found then raise exception 'questions_incomplete'; end if;
+    update public.games set
+      status = 'variant', q_index = q.pos,
+      current_question = jsonb_build_object(
+        'index', q.pos, 'model', q.model, 'prompt', q.prompt, 'options', q.options),
+      reveal = null, paused_remaining_ms = null,
+      phase_ms = duration_ms,
+      ends_at = clock_timestamp() + duration_ms * interval '1 millisecond',
+      updated_at = clock_timestamp()
+    where id = p_game;
+  elsif g.betrayal_variant = 'B' then
+    update public.games set
+      status = 'variant', variant_round = variant_round + 1,
+      current_question = null, reveal = null, paused_remaining_ms = null,
+      phase_ms = 30000, ends_at = clock_timestamp() + interval '30 seconds',
+      updated_at = clock_timestamp()
+    where id = p_game;
+  else
+    update public.games set
+      status = 'variant',
+      current_question = null, reveal = null, paused_remaining_ms = null,
+      phase_ms = 45000, ends_at = clock_timestamp() + interval '45 seconds',
+      updated_at = clock_timestamp()
+    where id = p_game;
+  end if;
 end $$;
 
 create or replace function public._recompute_scores(p_game uuid)
@@ -505,6 +603,9 @@ declare
   gchoice int;
   gby text;
   show_votes boolean;
+  show_acc boolean;
+  v_round int;
+  my_round int;
 begin
   select * into pl from public.players where id = p_player;
   if not found then raise exception 'unauthorized'; end if;
@@ -515,11 +616,18 @@ begin
   if not found then
     return jsonb_build_object('group', null, 'members', '[]'::jsonb, 'keys', '[]'::jsonb,
       'eliminations', '[]'::jsonb, 'answered', false, 'group_choice', null, 'answered_by', null,
-      'my_vote', null, 'votes_cast', 0, 'votes', '[]'::jsonb);
+      'my_vote', null, 'votes_cast', 0, 'votes', '[]'::jsonb,
+      'my_duel_choice', null, 'duel_cast', 0, 'my_accusation', null, 'accusations', '[]'::jsonb);
   end if;
   select * into grp from public.groups where id = gm.group_id;
   select * into gam from public.games where id = pl.game_id;
-  show_votes := gam.status in ('betrayal_reveal', 'trial', 'trial_reveal', 'finished');
+  my_round := gam.variant_round;
+  select max(v.round) into v_round from public.finale_votes v where v.group_id = grp.id;
+  -- Los votos solo se ven cuando el administrador cerró la votación. En las variantes
+  -- B y C, mientras el equipo siga en disputa, se revela cuántos traicionaron pero no quiénes.
+  show_votes := gam.status in ('betrayal_reveal', 'variant', 'variant_reveal', 'trial', 'trial_reveal', 'finished')
+    and not (coalesce(grp.outcome, '') = 'dispute' and gam.betrayal_variant in ('B', 'C'));
+  show_acc := gam.status in ('variant_reveal', 'trial', 'trial_reveal', 'finished');
 
   select a.choice, pa.name into gchoice, gby
   from public.group_answers a left join public.players pa on pa.id = a.answered_by
@@ -544,13 +652,24 @@ begin
     'answered', gchoice is not null,
     'group_choice', gchoice,
     'answered_by', gby,
-    'my_vote', (select v.vote from public.finale_votes v where v.player_id = p_player),
-    'votes_cast', (select count(*) from public.finale_votes v where v.group_id = grp.id),
+    'my_vote', (select v.vote from public.finale_votes v where v.player_id = p_player and v.round = my_round),
+    'votes_cast', (select count(*) from public.finale_votes v
+                   join public.group_members vm on vm.player_id = v.player_id and not vm.eliminated and not vm.escaped
+                   where v.group_id = grp.id and v.round = my_round),
     'votes', case when show_votes then coalesce((select jsonb_agg(jsonb_build_object(
         'player_id', v.player_id, 'player_name', pv.name, 'vote', v.vote, 'auto', v.auto)
         order by pv.name)
       from public.finale_votes v join public.players pv on pv.id = v.player_id
-      where v.group_id = grp.id), '[]'::jsonb) else '[]'::jsonb end
+      where v.group_id = grp.id and v.round = v_round), '[]'::jsonb) else '[]'::jsonb end,
+    'my_duel_choice', (select d.choice from public.duel_answers d where d.player_id = p_player),
+    'duel_cast', (select count(*) from public.duel_answers d where d.group_id = grp.id),
+    'my_accusation', (select a.suspect_id from public.accusations a where a.accuser_id = p_player),
+    'accusations', case when show_acc then coalesce((select jsonb_agg(jsonb_build_object(
+        'accuser_name', pa.name, 'suspect_name', ps.name) order by pa.name)
+      from public.accusations a
+      join public.players pa on pa.id = a.accuser_id
+      join public.players ps on ps.id = a.suspect_id
+      where a.group_id = grp.id), '[]'::jsonb) else '[]'::jsonb end
   );
 end $$;
 
@@ -570,7 +689,8 @@ begin
   perform 1 from public.player_secrets where player_id = p_player and token = p_token;
   if not found then raise exception 'unauthorized'; end if;
 
-  select * into gm from public.group_members where player_id = p_player and eliminated = false;
+  select * into gm from public.group_members
+   where player_id = p_player and eliminated = false and escaped = false;
   if not found then raise exception 'not_in_group_or_eliminated'; end if;
 
   select * into g from public.games where id = pl.game_id for share;
@@ -582,7 +702,7 @@ begin
   if p_choice is null or p_choice not between 0 and 3 then raise exception 'invalid_choice'; end if;
 
   if g.status = 'trial' then
-    perform 1 from public.groups where id = gm.group_id and outcome = 'trap';
+    perform 1 from public.groups where id = gm.group_id and outcome = 'hard';
     if not found then raise exception 'not_in_trial'; end if;
   end if;
 
@@ -615,22 +735,120 @@ begin
   perform 1 from public.player_secrets where player_id = p_player and token = p_token;
   if not found then raise exception 'unauthorized'; end if;
 
-  select * into gm from public.group_members where player_id = p_player and eliminated = false;
+  select * into gm from public.group_members
+   where player_id = p_player and eliminated = false and escaped = false;
   if not found then raise exception 'not_in_group_or_eliminated'; end if;
 
   select * into g from public.games where id = pl.game_id for share;
-  if g.status <> 'betrayal' then raise exception 'closed'; end if;
+  if g.status not in ('betrayal', 'variant') then raise exception 'closed'; end if;
   if clock_timestamp() > g.ends_at + interval '300 milliseconds' then
     raise exception 'closed';
   end if;
   if p_vote is null or p_vote not in ('share', 'steal') then raise exception 'invalid_choice'; end if;
 
   select * into grp from public.groups where id = gm.group_id;
-  if grp.outcome is not null then raise exception 'vote_not_needed'; end if;
+  if g.status = 'betrayal' then
+    if grp.outcome is not null then raise exception 'vote_not_needed'; end if;
+  else
+    -- Segunda vuelta (variante B): solo votan los equipos en disputa.
+    if g.betrayal_variant is distinct from 'B' or grp.outcome is distinct from 'dispute' then
+      raise exception 'vote_not_needed';
+    end if;
+  end if;
 
-  insert into public.finale_votes (group_id, player_id, vote)
-  values (gm.group_id, p_player, p_vote)
-  on conflict (player_id) do update set vote = excluded.vote, auto = false, voted_at = clock_timestamp();
+  insert into public.finale_votes (group_id, player_id, vote, round)
+  values (gm.group_id, p_player, p_vote, g.variant_round)
+  on conflict (player_id, round)
+  do update set vote = excluded.vote, auto = false, voted_at = clock_timestamp();
+
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- Variante A (duelo de traidores): solo responden quienes votaron "steal" en la ronda 1.
+-- Gana el primero en acertar; se mide con el reloj del servidor.
+create or replace function public.submit_duel_answer(p_player uuid, p_token uuid, p_pos int, p_choice int)
+returns jsonb
+language plpgsql security definer set search_path = public, extensions, pg_temp
+as $$
+declare
+  pl public.players;
+  gm public.group_members;
+  g  public.games;
+  grp public.groups;
+  q  public.questions;
+begin
+  select * into pl from public.players where id = p_player;
+  if not found then raise exception 'unauthorized'; end if;
+  perform 1 from public.player_secrets where player_id = p_player and token = p_token;
+  if not found then raise exception 'unauthorized'; end if;
+
+  select * into gm from public.group_members
+   where player_id = p_player and eliminated = false and escaped = false;
+  if not found then raise exception 'not_in_group_or_eliminated'; end if;
+
+  select * into g from public.games where id = pl.game_id for share;
+  if g.status <> 'variant' or g.betrayal_variant is distinct from 'A' then raise exception 'closed'; end if;
+  if g.q_index <> p_pos then raise exception 'stale_question'; end if;
+  if clock_timestamp() > g.ends_at + interval '300 milliseconds' then
+    raise exception 'closed';
+  end if;
+  if p_choice is null or p_choice not between 0 and 3 then raise exception 'invalid_choice'; end if;
+
+  select * into grp from public.groups where id = gm.group_id;
+  if grp.outcome is distinct from 'dispute' then raise exception 'not_in_duel'; end if;
+  perform 1 from public.finale_votes where player_id = p_player and round = 1 and vote = 'steal';
+  if not found then raise exception 'not_in_duel'; end if;
+
+  select * into q from public.questions where pos = g.q_index;
+  insert into public.duel_answers (group_id, player_id, choice, is_correct)
+  values (gm.group_id, p_player, p_choice, p_choice = q.correct_index)
+  on conflict (player_id) do nothing;
+  if not found then raise exception 'already_answered'; end if;
+
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- Variante C (acusación): cada sobreviviente señala a un compañero. Se puede cambiar
+-- hasta que se acabe el tiempo.
+create or replace function public.submit_accusation(p_player uuid, p_token uuid, p_suspect uuid)
+returns jsonb
+language plpgsql security definer set search_path = public, extensions, pg_temp
+as $$
+declare
+  pl public.players;
+  gm public.group_members;
+  g  public.games;
+  grp public.groups;
+begin
+  select * into pl from public.players where id = p_player;
+  if not found then raise exception 'unauthorized'; end if;
+  perform 1 from public.player_secrets where player_id = p_player and token = p_token;
+  if not found then raise exception 'unauthorized'; end if;
+
+  select * into gm from public.group_members
+   where player_id = p_player and eliminated = false and escaped = false;
+  if not found then raise exception 'not_in_group_or_eliminated'; end if;
+
+  select * into g from public.games where id = pl.game_id for share;
+  if g.status <> 'variant' or g.betrayal_variant is distinct from 'C' then raise exception 'closed'; end if;
+  if clock_timestamp() > g.ends_at + interval '300 milliseconds' then
+    raise exception 'closed';
+  end if;
+
+  select * into grp from public.groups where id = gm.group_id;
+  if grp.outcome is distinct from 'dispute' then raise exception 'vote_not_needed'; end if;
+
+  if p_suspect is null or p_suspect = p_player or not exists (
+       select 1 from public.group_members m
+       where m.group_id = gm.group_id and m.player_id = p_suspect
+         and not m.eliminated and not m.escaped) then
+    raise exception 'invalid_choice';
+  end if;
+
+  insert into public.accusations (group_id, accuser_id, suspect_id)
+  values (gm.group_id, p_player, p_suspect)
+  on conflict (accuser_id)
+  do update set suspect_id = excluded.suspect_id, accused_at = clock_timestamp();
 
   return jsonb_build_object('ok', true);
 end $$;
@@ -660,7 +878,7 @@ begin
   select pos into qpos from public.questions where id = p_id;
   if not found then raise exception 'questions_incomplete'; end if;
   if exists (select 1 from public.games
-             where status in ('question','paused','trial') and q_index = qpos) then
+             where status in ('question','paused','trial','variant') and q_index = qpos) then
     raise exception 'question_live';
   end if;
   if jsonb_typeof(p_options) <> 'array' or jsonb_array_length(p_options) <> 4 then
@@ -685,13 +903,19 @@ language plpgsql security definer set search_path = public, extensions, pg_temp
 as $$
 declare
   alphabet constant text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  c text; n int; mx int; i int; g public.games;
+  c text; n int; mx int; i int; g public.games; hn int;
 begin
   perform public._assert_admin(p_pin);
-  -- Puertas contiguas 0..n-1 y exactamente una pregunta para la prueba final.
+  -- Puertas contiguas 0..n-1, una pregunta de duelo y la ronda difícil (11..10+n).
   select count(*), coalesce(max(pos), -1) + 1 into n, mx from public.questions where kind = 'door';
   if n = 0 or mx <> n then raise exception 'questions_incomplete'; end if;
   if (select count(*) from public.questions where kind = 'final') <> 1 then
+    raise exception 'questions_incomplete';
+  end if;
+  select count(*) into hn from public.questions where kind = 'hard';
+  if hn < 1 or hn > 8
+     or (select min(pos) from public.questions where kind = 'hard') <> 11
+     or (select max(pos) from public.questions where kind = 'hard') <> 10 + hn then
     raise exception 'questions_incomplete';
   end if;
   loop
@@ -701,7 +925,7 @@ begin
     end loop;
     exit when not exists (select 1 from public.games where code = c);
   end loop;
-  insert into public.games (code, q_total) values (c, n) returning * into g;
+  insert into public.games (code, q_total, hard_total) values (c, n, hn) returning * into g;
   return to_jsonb(g);
 end $$;
 
@@ -734,6 +958,7 @@ begin
                   'id', gr.id, 'game_id', gr.game_id, 'color', gr.color,
                   'key_count', gr.key_count, 'eliminated', gr.eliminated,
                   'outcome', gr.outcome, 'winner_player_id', gr.winner_player_id,
+                  'traitor_count', gr.traitor_count,
                   'created_at', gr.created_at,
                   'members', coalesce((select jsonb_agg(jsonb_build_object(
                     'id', gm.id, 'group_id', gm.group_id, 'player_id', gm.player_id,
@@ -754,10 +979,26 @@ begin
       where gr.game_id = g.id), '[]'::jsonb),
     'finale_votes', coalesce((select jsonb_agg(jsonb_build_object(
       'group_id', v.group_id, 'player_id', v.player_id, 'player_name', pv.name,
-      'vote', v.vote, 'auto', v.auto) order by pv.name)
+      'vote', v.vote, 'auto', v.auto, 'round', v.round) order by v.round, pv.name)
       from public.finale_votes v
       join public.groups gr on gr.id = v.group_id
       join public.players pv on pv.id = v.player_id
+      where gr.game_id = g.id), '[]'::jsonb),
+    'duel_answers', coalesce((select jsonb_agg(jsonb_build_object(
+      'group_id', d.group_id, 'player_id', d.player_id, 'player_name', pd.name,
+      'choice', d.choice, 'is_correct', d.is_correct, 'answered_at', d.answered_at)
+      order by d.answered_at)
+      from public.duel_answers d
+      join public.groups gr on gr.id = d.group_id
+      join public.players pd on pd.id = d.player_id
+      where gr.game_id = g.id), '[]'::jsonb),
+    'accusations', coalesce((select jsonb_agg(jsonb_build_object(
+      'group_id', a.group_id, 'accuser_name', pa.name, 'suspect_name', ps.name)
+      order by pa.name)
+      from public.accusations a
+      join public.groups gr on gr.id = a.group_id
+      join public.players pa on pa.id = a.accuser_id
+      join public.players ps on ps.id = a.suspect_id
       where gr.game_id = g.id), '[]'::jsonb),
     'questions', coalesce((select jsonb_agg(to_jsonb(q) order by q.pos) from public.questions q), '[]'::jsonb),
     'server_time', clock_timestamp()
@@ -886,7 +1127,7 @@ begin
 end $$;
 
 -- Avanza: de la respuesta mostrada a la siguiente puerta (o a la última puerta
--- tras la décima), y del resultado de la prueba final al cierre.
+-- tras la décima), y de cada pregunta de la ronda difícil a la siguiente o al cierre.
 create or replace function public.admin_next(p_pin text, p_game uuid)
 returns jsonb
 language plpgsql security definer set search_path = public, extensions, pg_temp
@@ -903,8 +1144,20 @@ begin
       perform public._open_betrayal(g.id);
     end if;
   elsif g.status = 'trial_reveal' then
-    update public.games set status = 'finished', ends_at = null, phase_ms = null,
-      updated_at = clock_timestamp() where id = g.id;
+    if g.q_index < 10 + g.hard_total
+       and exists (select 1 from public.groups where game_id = g.id and outcome = 'hard') then
+      -- Siguiente pregunta de la ronda difícil.
+      perform public._start_question(g.id, g.q_index + 1);
+      update public.games set status = 'trial', updated_at = clock_timestamp() where id = g.id;
+    else
+      -- Terminó la ronda difícil: quien sigue con vida escapa.
+      update public.group_members gm set escaped = true
+      where not gm.eliminated and not gm.escaped and gm.group_id in (
+        select id from public.groups where game_id = g.id and outcome = 'hard');
+      update public.groups set outcome = 'escaped' where game_id = g.id and outcome = 'hard';
+      update public.games set status = 'finished', ends_at = null, phase_ms = null,
+        updated_at = clock_timestamp() where id = g.id;
+    end if;
   else
     raise exception 'invalid_state';
   end if;
@@ -913,7 +1166,8 @@ begin
 end $$;
 
 -- Cierra la votación de la última puerta y aplica las reglas de la traición.
-create or replace function public.admin_resolve_betrayal(p_pin text, p_game uuid)
+drop function if exists public.admin_resolve_betrayal(text, uuid);
+create or replace function public.admin_resolve_betrayal(p_pin text, p_game uuid, p_variant text default null)
 returns jsonb
 language plpgsql security definer set search_path = public, extensions, pg_temp
 as $$
@@ -925,11 +1179,14 @@ declare
   t int;
   traitors uuid[];
   tname text;
+  disputes int := 0;
+  variants constant text[] := array['A', 'B', 'C'];
 begin
   perform public._assert_admin(p_pin);
   select * into g from public.games where id = p_game for update;
   if not found then raise exception 'game_not_found'; end if;
   if g.status <> 'betrayal' then raise exception 'invalid_state'; end if;
+  if p_variant is not null and p_variant not in ('A', 'B', 'C') then raise exception 'invalid_choice'; end if;
 
   for grp in select * from public.groups where game_id = g.id and outcome is null order by color loop
     -- Quien no votó cuenta como "salimos todos".
@@ -949,8 +1206,8 @@ begin
     if n = 0 then
       update public.groups set outcome = 'wiped', eliminated = true where id = grp.id;
     elsif t = 0 then
-      -- Todos confiaron: la puerta se sella y hay prueba final.
-      update public.groups set outcome = 'trap' where id = grp.id;
+      -- Todos confiaron: la puerta se sella y empiezan la ronda difícil.
+      update public.groups set outcome = 'hard', traitor_count = 0 where id = grp.id;
     elsif t = 1 then
       -- Un solo traidor: sale ahora mismo y gana; el resto queda atrapado.
       select name into tname from public.players where id = traitors[1];
@@ -966,56 +1223,225 @@ begin
       update public.groups set outcome = 'lone_winner', winner_player_id = traitors[1]
         where id = grp.id;
     else
-      -- Dos o más traidores se anulan entre sí; los que cooperaron siguen.
-      for mem in
-        select player_id from public.group_members
-        where group_id = grp.id and not eliminated and player_id = any (traitors)
-      loop
-        perform public._eliminate(grp.id, mem.player_id, g.q_total,
-          'Dos traidores se anularon entre sí: nadie salió por esa puerta.');
-      end loop;
-      if n - t > 0 then
-        update public.groups set outcome = 'trap' where id = grp.id;
-      else
-        update public.groups set outcome = 'wiped', eliminated = true where id = grp.id;
-      end if;
+      -- Dos o más traidores: el equipo queda en disputa y la variante sorteada decide.
+      update public.groups set outcome = 'dispute', traitor_count = t where id = grp.id;
+      disputes := disputes + 1;
     end if;
   end loop;
 
   update public.games set status = 'betrayal_reveal', ends_at = null, paused_remaining_ms = null,
+    variant_round = 1,
+    betrayal_variant = case when disputes > 0
+      then coalesce(p_variant, variants[1 + floor(random() * array_length(variants, 1))::int])
+      else null end,
     updated_at = clock_timestamp() where id = g.id;
   select * into g from public.games where id = p_game;
   return to_jsonb(g);
 end $$;
 
--- Lanza la pregunta de la prueba final para los equipos clasificados.
--- Si ninguno clasificó, la partida termina directamente.
+-- Reparte el resultado de un equipo en disputa una vez aplicada la variante:
+-- con cooperadores vivos sigue a la ronda difícil; sin ellos, gana el traidor que
+-- escapó (si lo hay) o el equipo queda aniquilado.
+create or replace function public._settle_dispute(p_group uuid)
+returns void
+language plpgsql security definer set search_path = public, extensions, pg_temp
+as $$
+declare coop int; w uuid;
+begin
+  select winner_player_id into w from public.groups where id = p_group;
+  select count(*) into coop from public.group_members
+   where group_id = p_group and not eliminated and not escaped;
+  if coop > 0 then
+    update public.groups set outcome = 'hard' where id = p_group;
+  elsif w is not null then
+    update public.groups set outcome = 'lone_winner' where id = p_group;
+  else
+    update public.groups set outcome = 'wiped', eliminated = true where id = p_group;
+  end if;
+end $$;
+
+-- Avanza desde la traición resuelta o desde una variante resuelta:
+--   * si quedan equipos en disputa (solo la segunda vuelta B), abre otra ronda;
+--   * si hay equipos para la ronda difícil, empiezan de CERO (pierden las llaves)
+--     y se lanza la primera pregunta difícil;
+--   * si no queda ninguno, la partida termina.
 create or replace function public.admin_start_trial(p_pin text, p_game uuid)
 returns jsonb
 language plpgsql security definer set search_path = public, extensions, pg_temp
 as $$
-declare g public.games; fpos int;
+declare g public.games; hpos int;
 begin
   perform public._assert_admin(p_pin);
   select * into g from public.games where id = p_game for update;
   if not found then raise exception 'game_not_found'; end if;
-  if g.status <> 'betrayal_reveal' then raise exception 'invalid_state'; end if;
+  if g.status not in ('betrayal_reveal', 'variant_reveal') then raise exception 'invalid_state'; end if;
 
-  if not exists (select 1 from public.groups where game_id = g.id and outcome = 'trap') then
+  if exists (select 1 from public.groups where game_id = g.id and outcome = 'dispute') then
+    perform public._open_variant(g.id);
+  elsif not exists (select 1 from public.groups where game_id = g.id and outcome = 'hard') then
     update public.games set status = 'finished', ends_at = null, phase_ms = null,
       updated_at = clock_timestamp() where id = g.id;
   else
-    select pos into fpos from public.questions where kind = 'final';
-    if not found then raise exception 'questions_incomplete'; end if;
-    perform public._start_question(g.id, fpos);
+    select min(pos) into hpos from public.questions where kind = 'hard';
+    if hpos is null then raise exception 'questions_incomplete'; end if;
+    delete from public.group_keys
+      where group_id in (select id from public.groups where game_id = g.id and outcome = 'hard');
+    update public.groups set key_count = 0 where game_id = g.id and outcome = 'hard';
+    perform public._start_question(g.id, hpos);
     update public.games set status = 'trial', updated_at = clock_timestamp() where id = g.id;
   end if;
   select * into g from public.games where id = p_game;
   return to_jsonb(g);
 end $$;
 
--- Cierra la prueba final: acertar = el equipo escapa; fallar o no responder =
--- vuelve al nivel cero (pierde todas sus llaves).
+-- Cierra la variante sorteada para los equipos en disputa.
+--   A duelo: gana el primer traidor que acierta y escapa solo; los demás traidores caen.
+--   B segunda vuelta: 0 traidores -> ronda difícil; 1 -> sale solo; 2 o más -> otra
+--     vuelta (hasta la ronda 3, donde los traidores caen).
+--   C acusación: cae el traidor señalado por alguien y quien acusó a un inocente.
+-- Los que cooperaron siempre pasan a la ronda difícil.
+create or replace function public.admin_resolve_variant(p_pin text, p_game uuid)
+returns jsonb
+language plpgsql security definer set search_path = public, extensions, pg_temp
+as $$
+declare
+  g public.games;
+  q public.questions;
+  grp record;
+  mem record;
+  traitors uuid[];
+  t int;
+  winner uuid;
+  wname text;
+  counts jsonb;
+  rnd int;
+begin
+  perform public._assert_admin(p_pin);
+  select * into g from public.games where id = p_game for update;
+  if not found then raise exception 'game_not_found'; end if;
+  if g.status <> 'variant' then raise exception 'invalid_state'; end if;
+  rnd := g.variant_round;
+
+  if g.betrayal_variant = 'A' then
+    select * into q from public.questions where pos = g.q_index;
+    for grp in select * from public.groups where game_id = g.id and outcome = 'dispute' order by color loop
+      select coalesce(array_agg(v.player_id), '{}'::uuid[]) into traitors
+      from public.finale_votes v
+      join public.group_members gm on gm.player_id = v.player_id and not gm.eliminated and not gm.escaped
+      where v.group_id = grp.id and v.round = 1 and v.vote = 'steal';
+
+      winner := null;
+      select d.player_id into winner from public.duel_answers d
+      where d.group_id = grp.id and d.is_correct and d.player_id = any (traitors)
+      order by d.answered_at limit 1;
+
+      if winner is not null then
+        select name into wname from public.players where id = winner;
+        update public.group_members set escaped = true where group_id = grp.id and player_id = winner;
+        update public.groups set winner_player_id = winner where id = grp.id;
+      end if;
+      for mem in
+        select player_id from public.group_members
+        where group_id = grp.id and not eliminated and not escaped and player_id = any (traitors)
+      loop
+        perform public._eliminate(grp.id, mem.player_id, g.q_total,
+          case when winner is not null
+            then 'Perdiste el duelo: ' || wname || ' respondió primero y escapó solo.'
+            else 'Nadie ganó el duelo de traidores: la puerta se los tragó a todos.' end);
+      end loop;
+      perform public._settle_dispute(grp.id);
+    end loop;
+
+    select jsonb_agg(c order by i) into counts from (
+      select s.i, count(d.id) as c
+      from generate_series(0, 3) as s(i)
+      left join public.duel_answers d
+        on d.choice = s.i and d.group_id in (select id from public.groups where game_id = g.id)
+      group by s.i) x;
+    update public.games set reveal = jsonb_build_object('correct_index', q.correct_index,
+      'explanation', q.explanation, 'counts', counts) where id = g.id;
+
+  elsif g.betrayal_variant = 'B' then
+    for grp in select * from public.groups where game_id = g.id and outcome = 'dispute' order by color loop
+      -- Quien no votó en esta vuelta cuenta como "salimos todos".
+      insert into public.finale_votes (group_id, player_id, vote, auto, round)
+      select grp.id, gm.player_id, 'share', true, rnd
+      from public.group_members gm
+      where gm.group_id = grp.id and not gm.eliminated and not gm.escaped
+        and not exists (select 1 from public.finale_votes v
+                        where v.player_id = gm.player_id and v.round = rnd);
+      select coalesce(array_agg(v.player_id), '{}'::uuid[]) into traitors
+      from public.finale_votes v
+      join public.group_members gm on gm.player_id = v.player_id and not gm.eliminated and not gm.escaped
+      where v.group_id = grp.id and v.round = rnd and v.vote = 'steal';
+      t := coalesce(array_length(traitors, 1), 0);
+
+      if t = 0 then
+        update public.groups set outcome = 'hard', traitor_count = 0 where id = grp.id;
+      elsif t = 1 then
+        select name into wname from public.players where id = traitors[1];
+        update public.group_members set escaped = true
+          where group_id = grp.id and player_id = traitors[1];
+        for mem in
+          select player_id from public.group_members
+          where group_id = grp.id and not eliminated and not escaped
+        loop
+          perform public._eliminate(grp.id, mem.player_id, g.q_total,
+            'Traicionado por ' || wname || ' en la segunda vuelta: escapó solo y selló la puerta.');
+        end loop;
+        update public.groups set outcome = 'lone_winner', winner_player_id = traitors[1],
+          traitor_count = 1 where id = grp.id;
+      elsif rnd < 3 then
+        update public.groups set traitor_count = t where id = grp.id;
+      else
+        for mem in
+          select player_id from public.group_members
+          where group_id = grp.id and not eliminated and not escaped and player_id = any (traitors)
+        loop
+          perform public._eliminate(grp.id, mem.player_id, g.q_total,
+            'Dos traidores se anularon entre sí: nadie salió por esa puerta.');
+        end loop;
+        update public.groups set traitor_count = t where id = grp.id;
+        perform public._settle_dispute(grp.id);
+      end if;
+    end loop;
+
+  else
+    for grp in select * from public.groups where game_id = g.id and outcome = 'dispute' order by color loop
+      select coalesce(array_agg(v.player_id), '{}'::uuid[]) into traitors
+      from public.finale_votes v
+      join public.group_members gm on gm.player_id = v.player_id and not gm.eliminated and not gm.escaped
+      where v.group_id = grp.id and v.round = 1 and v.vote = 'steal';
+
+      -- Cae el traidor señalado por alguien...
+      for mem in
+        select distinct a.suspect_id as pid from public.accusations a
+        where a.group_id = grp.id and a.suspect_id = any (traitors)
+      loop
+        perform public._eliminate(grp.id, mem.pid, g.q_total,
+          'Te señalaron y eras traidor: la puerta te expulsó.');
+      end loop;
+      -- ...y cae quien acusó a un inocente.
+      for mem in
+        select a.accuser_id as pid from public.accusations a
+        where a.group_id = grp.id and not (a.suspect_id = any (traitors))
+      loop
+        perform public._eliminate(grp.id, mem.pid, g.q_total,
+          'Acusaste a un inocente: la puerta te castigó.');
+      end loop;
+      perform public._settle_dispute(grp.id);
+    end loop;
+  end if;
+
+  update public.games set status = 'variant_reveal', ends_at = null, paused_remaining_ms = null,
+    updated_at = clock_timestamp() where id = g.id;
+  select * into g from public.games where id = p_game;
+  return to_jsonb(g);
+end $$;
+
+-- Cierra la pregunta de la ronda difícil: el equipo que acierta gana una llave; el que
+-- falla o no responde pierde a DOS miembros al azar (a uno si solo queda uno).
+-- Un equipo sin miembros activos queda aniquilado.
 create or replace function public.admin_resolve_trial(p_pin text, p_game uuid)
 returns jsonb
 language plpgsql security definer set search_path = public, extensions, pg_temp
@@ -1024,6 +1450,20 @@ declare
   g public.games;
   q public.questions;
   counts jsonb;
+  victim record;
+  first_reasons constant text[] := array[
+    'El techo se vino abajo: la ronda difícil no perdona.',
+    'La niebla ácida del pasillo te devoró.',
+    'El suelo se abrió bajo tus pies.',
+    'Una cuchilla te alcanzó en la oscuridad.',
+    'El silencio de la sala te venció.',
+    'Te atrapó la reja que se cerró de golpe.'
+  ];
+  second_reasons constant text[] := array[
+    'La puerta se cobró doble: caíste junto a tu compañero.',
+    'La trampa tenía dos víctimas y tú eras la segunda.',
+    'Te alcanzó la onda expansiva del error de tu equipo.'
+  ];
 begin
   perform public._assert_admin(p_pin);
   select * into g from public.games where id = p_game for update;
@@ -1036,25 +1476,47 @@ begin
     from generate_series(0, 3) as s(i)
     left join public.group_answers a
       on a.question_pos = g.q_index and a.choice = s.i
-      and a.group_id in (select id from public.groups where game_id = g.id)
+      and a.group_id in (select id from public.groups where game_id = g.id and outcome = 'hard')
     group by s.i) t;
 
-  -- Acertaron: escapan todos los que siguen vivos.
-  update public.group_members gm set escaped = true
-  where not gm.eliminated and gm.group_id in (
-    select gr.id from public.groups gr
-    join public.group_answers ga on ga.group_id = gr.id and ga.question_pos = g.q_index
-    where gr.game_id = g.id and gr.outcome = 'trap' and ga.choice = q.correct_index);
-  update public.groups gr set outcome = 'escaped'
-  where gr.game_id = g.id and gr.outcome = 'trap'
-    and exists (select 1 from public.group_answers ga
-                where ga.group_id = gr.id and ga.question_pos = g.q_index and ga.choice = q.correct_index);
+  -- Llave para el equipo que acertó.
+  insert into public.group_keys (group_id, question_pos, color)
+  select ga.group_id, g.q_index, gr.color
+  from public.group_answers ga
+  join public.groups gr on gr.id = ga.group_id
+  where gr.game_id = g.id and gr.outcome = 'hard'
+    and ga.question_pos = g.q_index and ga.choice = q.correct_index
+  on conflict (group_id, question_pos) do nothing;
+  update public.groups gr set key_count = (
+    select count(*) from public.group_keys k where k.group_id = gr.id
+  ) where gr.game_id = g.id and gr.outcome = 'hard';
 
-  -- Fallaron o no respondieron: nivel cero.
-  delete from public.group_keys
-  where group_id in (select id from public.groups where game_id = g.id and outcome = 'trap');
-  update public.groups set outcome = 'reset', key_count = 0
-  where game_id = g.id and outcome = 'trap';
+  -- Error o silencio: caen hasta dos miembros al azar.
+  for victim in
+    select gr.id as group_id, x.player_id, x.rn
+    from public.groups gr
+    join lateral (
+      select m.player_id, row_number() over (order by random()) as rn
+      from public.group_members m
+      where m.group_id = gr.id and not m.eliminated and not m.escaped
+    ) x on x.rn <= 2
+    left join public.group_answers ga on ga.group_id = gr.id and ga.question_pos = g.q_index
+    where gr.game_id = g.id and gr.outcome = 'hard'
+      and (ga.id is null or ga.choice <> q.correct_index)
+  loop
+    perform public._eliminate(victim.group_id, victim.player_id, g.q_index,
+      case when victim.rn = 1
+        then first_reasons[1 + floor(random() * array_length(first_reasons, 1))::int]
+        else second_reasons[1 + floor(random() * array_length(second_reasons, 1))::int] end);
+  end loop;
+
+  -- Sin miembros activos: el equipo cae (o gana el traidor que escapó antes).
+  update public.groups gr set
+    outcome = case when gr.winner_player_id is not null then 'lone_winner' else 'wiped' end,
+    eliminated = (gr.winner_player_id is null)
+  where gr.game_id = g.id and gr.outcome = 'hard'
+    and not exists (select 1 from public.group_members m
+                    where m.group_id = gr.id and not m.eliminated and not m.escaped);
 
   update public.games set status = 'trial_reveal', ends_at = null, paused_remaining_ms = null,
     reveal = jsonb_build_object('correct_index', q.correct_index,
@@ -1174,7 +1636,7 @@ begin
   select p.* into victim
   from public.players p
   join public.group_members gm on gm.player_id = p.id
-  where gm.group_id = p_group and gm.eliminated = false
+  where gm.group_id = p_group and gm.eliminated = false and gm.escaped = false
   order by random()
   limit 1;
   if not found then
@@ -1222,13 +1684,16 @@ end $$;
 
 revoke execute on function
   public._assert_admin(text), public._start_question(uuid, int), public._recompute_scores(uuid),
-  public._eliminate(uuid, uuid, int, text), public._open_betrayal(uuid)
+  public._eliminate(uuid, uuid, int, text), public._open_betrayal(uuid),
+  public._open_variant(uuid), public._settle_dispute(uuid)
   from public, anon, authenticated;
 
 revoke execute on function
   public.server_time(), public.join_game(text, text),
   public.submit_answer(uuid, uuid, int, int), public.my_answers(uuid, uuid), public.my_group_state(uuid, uuid),
   public.submit_group_answer(uuid, uuid, int, int), public.submit_vote(uuid, uuid, text),
+  public.submit_duel_answer(uuid, uuid, int, int), public.submit_accusation(uuid, uuid, uuid),
+  public.admin_resolve_variant(text, uuid),
   public.admin_questions(text),
   public.admin_save_question(text, uuid, text, text, jsonb, int, text),
   public.admin_form_groups(text, uuid),
@@ -1236,7 +1701,7 @@ revoke execute on function
   public.admin_snapshot(text, uuid), public.admin_start(text, uuid),
   public.admin_pause(text, uuid), public.admin_resume(text, uuid),
   public.admin_reveal(text, uuid), public.admin_next(text, uuid),
-  public.admin_resolve_betrayal(text, uuid), public.admin_start_trial(text, uuid),
+  public.admin_resolve_betrayal(text, uuid, text), public.admin_start_trial(text, uuid),
   public.admin_resolve_trial(text, uuid),
   public.admin_finish(text, uuid), public.admin_remove_player(text, uuid),
   public.eliminate_random_member(text, uuid, int), public.award_group_key(text, uuid, int)
@@ -1246,6 +1711,8 @@ grant execute on function
   public.server_time(), public.join_game(text, text),
   public.submit_answer(uuid, uuid, int, int), public.my_answers(uuid, uuid), public.my_group_state(uuid, uuid),
   public.submit_group_answer(uuid, uuid, int, int), public.submit_vote(uuid, uuid, text),
+  public.submit_duel_answer(uuid, uuid, int, int), public.submit_accusation(uuid, uuid, uuid),
+  public.admin_resolve_variant(text, uuid),
   public.admin_questions(text),
   public.admin_save_question(text, uuid, text, text, jsonb, int, text),
   public.admin_form_groups(text, uuid),
@@ -1253,7 +1720,7 @@ grant execute on function
   public.admin_snapshot(text, uuid), public.admin_start(text, uuid),
   public.admin_pause(text, uuid), public.admin_resume(text, uuid),
   public.admin_reveal(text, uuid), public.admin_next(text, uuid),
-  public.admin_resolve_betrayal(text, uuid), public.admin_start_trial(text, uuid),
+  public.admin_resolve_betrayal(text, uuid, text), public.admin_start_trial(text, uuid),
   public.admin_resolve_trial(text, uuid),
   public.admin_finish(text, uuid), public.admin_remove_player(text, uuid),
   public.eliminate_random_member(text, uuid, int), public.award_group_key(text, uuid, int)
@@ -1263,7 +1730,7 @@ grant execute on function
 -- 8. DATOS INICIALES
 -- ---------------------------------------------------------------------
 
--- 10 puertas fáciles (posiciones 0..9) + 1 pregunta para la prueba final (posición 10).
+-- 10 puertas fáciles (0..9) + 1 pregunta de duelo (10) + 5 de la ronda difícil (11..15).
 -- Se pueden editar desde /admin > Preguntas. Al volver a ejecutar este script solo se
 -- reescriben las filas que sigan con el texto de ejemplo «[EDITAR]»: tus cambios se respetan.
 insert into public.questions as q (pos, kind, model, prompt, options, correct_index, explanation) values
@@ -1307,10 +1774,31 @@ insert into public.questions as q (pos, kind, model, prompt, options, correct_in
    'Una ventaja de reutilizar componentes del sistema existente es…',
    '["Escribir menos documentación","Evitar que el sistema tenga usuarios","Ahorrar tiempo y esfuerzo al aprovechar piezas ya probadas","Hacer el sistema más lento"]', 2,
    'Reutilizar piezas que ya funcionan ahorra tiempo y esfuerzo, y reduce errores nuevos.'),
- (10, 'final', 'Prueba final',
+ (10, 'final', 'Duelo de traidores',
    'Reestructurar el código hoy para evitar fallos futuros y facilitar cambios es mantenimiento…',
    '["Correctivo","Adaptativo","Perfectivo","Preventivo"]', 3,
-   'El mantenimiento preventivo mejora la estructura del software antes de que aparezcan problemas.')
+   'El mantenimiento preventivo mejora la estructura del software antes de que aparezcan problemas.'),
+ -- Ronda difícil (posiciones 11..15). Preguntas de aplicación: piden razonar, no recordar.
+ (11, 'hard', 'Quick-Fix',
+   'Un equipo aplica Quick-Fix durante años y casi nunca actualiza la documentación. ¿Qué es lo más probable que ocurra?',
+   '["El sistema se vuelve más fácil de mantener porque cada arreglo es pequeño","Baja el costo de mantenimiento de forma permanente","La estructura se degrada y cada cambio futuro cuesta más y rompe más cosas","Deja de hacer falta el mantenimiento preventivo"]', 2,
+   'Quick-Fix es barato hoy, pero los parches acumulados y la documentación desactualizada erosionan la estructura: cada cambio posterior es más caro y arriesgado.'),
+ (12, 'hard', 'Boehm',
+   'Según el modelo económico de Boehm, un cambio cuyo costo estimado supera con claridad su beneficio esperado debería…',
+   '["Rechazarse o posponerse, porque la decisión se basa en la relación costo-beneficio","Hacerse de inmediato porque el usuario lo pidió","Resolverse con Quick-Fix para ahorrar tiempo","Delegarse siempre al área de documentación"]', 0,
+   'Boehm trata el mantenimiento como una decisión económica: los cambios se priorizan por su relación costo-beneficio y los que no se justifican se descartan o posponen.'),
+ (13, 'hard', 'Osborne',
+   'En el modelo de Osborne, ¿para qué sirve la retroalimentación sobre los problemas que aparecen durante el mantenimiento?',
+   '["Solo para registrar las quejas de los usuarios","Para sustituir las pruebas del software","Para decidir cuándo se retira el sistema","Para mejorar la mantenibilidad: lo aprendido se incorpora al diseño y a los cambios siguientes"]', 3,
+   'Osborne propone considerar la mantenibilidad desde el diseño y mantener retroalimentación durante todo el proceso, de modo que lo aprendido mejore los cambios y los sistemas futuros.'),
+ (14, 'hard', 'Mejora iterativa',
+   'Un equipo aplica mejora iterativa y termina un ciclo de análisis, rediseño e implementación. ¿Qué hace después?',
+   '["Da el sistema por terminado sin evaluarlo de nuevo","Evalúa el sistema ya mejorado y, si hace falta, empieza otro ciclo partiendo de él","Descarta el sistema y lo reconstruye desde cero","Elimina la documentación del ciclo anterior"]', 1,
+   'En la mejora iterativa cada ciclo parte del sistema ya existente: se analiza el resultado y se repite el ciclo mientras haga falta.'),
+ (15, 'hard', 'Tipos de mantenimiento',
+   'Los usuarios piden que un reporte cargue en 2 segundos en lugar de 10, sin cambiar sus resultados. Ese cambio es mantenimiento…',
+   '["Correctivo","Adaptativo","Perfectivo","Preventivo"]', 2,
+   'El mantenimiento perfectivo mejora el rendimiento o las funciones de un software que ya funciona correctamente.')
 on conflict (pos) do update set
   kind = excluded.kind, model = excluded.model, prompt = excluded.prompt,
   options = excluded.options, correct_index = excluded.correct_index,
